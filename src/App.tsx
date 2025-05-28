@@ -44,12 +44,6 @@ function App() {
         <Header />
         
         <main className="flex-1 w-full max-w-3xl mx-auto flex flex-col items-center justify-center py-8 gap-8">
-          <button 
-            onClick={testAccessToken}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Test Access Token
-          </button>
           <TextArea text={text} isRecording={isRecording} />
           <RecordButton 
             isRecording={isRecording} 
