@@ -36,8 +36,9 @@ export const useSpeechRecognition = () => {
     try {
       if (!isRecording) {
         // Get token first
-        const tokenResponse = await axios.get('http://localhost:3001/api/token');
-        console.log('Got token:', tokenResponse.data);
+        // const tokenResponse = await axios.get('http://localhost:3001/api/token');
+        // console.log('Got token:', tokenResponse.data); 
+        // Token is fetched by the server now, not needed explicitly by client for /api/speech
 
         // Start recording
         await startRecording();
@@ -46,29 +47,32 @@ export const useSpeechRecognition = () => {
         // Stop recording and get the audio blob
         const audioBlob = await stopRecording();
         setText('Processing audio...');
+        console.log('Audio blob type:', audioBlob.type); // Should be 'audio/pcm'
         console.log('Audio blob size:', audioBlob.size);
 
-        // Convert audio to base64
-        const audioBase64 = await convertBlobToBase64(audioBlob);
-        console.log('Base64 length:', audioBase64.length);
-
         // Send to backend for speech recognition
-        const response = await axios.post('http://localhost:3001/api/speech', {
-          format: 'pcm',
-          rate: 16000,
-          channel: 1,
-          cuid: 'unique_user_id',
-          speech: audioBase64,
-          len: audioBlob.size
-        });
+        // The server now expects raw audio data and specific headers for Aliyun
+        const response = await axios.post('http://localhost:3001/api/speech', 
+          audioBlob, // Send the raw blob directly
+          {
+            headers: {
+              'Content-Type': audioBlob.type || 'audio/pcm', // Use blob's type or default to pcm
+              'X-Audio-Format': 'pcm', // Based on useAudioRecorder.ts
+              'X-Audio-Samplerate': '16000' // Based on useAudioRecorder.ts
+            }
+          }
+        );
 
         console.log('Speech recognition response:', response.data);
 
-        if (response.data.err_no === 0 && response.data.result) {
-          // Update the text with the recognition result
-          setText(response.data.result.join(''));
+        // Aliyun response structure is different from Baidu
+        // Server now returns { transcript: "...", fullResponse: {...} } on success
+        if (response.data && response.data.transcript) {
+          setText(response.data.transcript);
+        } else if (response.data && response.data.error) {
+          setText(`Error: ${response.data.details || response.data.error}`);
         } else {
-          setText(`Error: ${response.data.err_msg || 'Recognition failed'}`);
+          setText('Error: Recognition failed. Unexpected response from server.');
         }
       }
     } catch (err: any) {

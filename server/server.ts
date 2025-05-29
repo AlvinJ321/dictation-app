@@ -1,161 +1,192 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import axios from 'axios';
+import axios from 'axios'; // Re-added for Aliyun HTTP POST
+// import SpeechTranscriber from 'alibabacloud-nls'; // Not used for direct HTTP POST
+import RPCClient from '@alicloud/pop-core'; // Import for token generation
 
 dotenv.config();
 
 const app = express();
 const port = 3001;
 
-const AK = process.env.BAIDU_API_KEY;
-const SK = process.env.BAIDU_SECRET_KEY;
+const ALIYUN_AK_ID = process.env.ALIYUN_AK_ID;
+const ALIYUN_AK_SECRET = process.env.ALIYUN_AK_SECRET;
+const ALIYUN_APP_KEY = process.env.ALIYUN_APP_KEY; // AppKey will be used by the NLS SDK directly
 
-// Increase all limits
+// Use a larger limit for audio data if necessary, e.g., '50mb'
+app.use(express.raw({ type: 'audio/wav', limit: '10mb' })); // For WAV files
+app.use(express.raw({ type: 'audio/pcm', limit: '10mb' })); // For PCM files
+app.use(express.raw({ type: 'audio/mpeg', limit: '10mb' })); // For MP3 files
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(cors());
-app.use(express.json({
-    limit: '50mb'
-}));
-app.use(express.urlencoded({ 
-    extended: true, 
-    limit: '500mb',
-    parameterLimit: 50000 
-}));
-app.use(express.raw({ limit: '500mb' }));
 
 // Store token in memory (in production, use a proper cache/database)
 let accessToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
-// Get access token from Baidu API
+interface AliyunTokenResponse {
+    Token?: {
+        Id?: string;
+        ExpireTime?: number;
+    };
+    RequestId?: string;
+    // Add other fields from actual response if necessary
+}
+
+// Get access token from Aliyun API
 async function getAccessToken() {
     if (accessToken && tokenExpiry && tokenExpiry > new Date()) {
-        console.log('Using cached token');
+        console.log('Using cached Aliyun token');
         return accessToken;
     }
 
+    if (!ALIYUN_AK_ID || !ALIYUN_AK_SECRET) {
+        const errMsg = 'Aliyun AccessKey ID or Secret is not configured.';
+        console.error(errMsg);
+        throw new Error(errMsg);
+    }
+
     try {
-        console.log('Fetching new access token...');
-        const response = await axios({
-            method: 'POST',
-            url: `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${AK}&client_secret=${SK}`,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
+        console.log('Fetching new Aliyun access token...');
+
+        const client = new RPCClient({
+            accessKeyId: ALIYUN_AK_ID,
+            accessKeySecret: ALIYUN_AK_SECRET,
+            endpoint: 'https://nls-meta.cn-shanghai.aliyuncs.com', // Shanghai endpoint for token service
+            apiVersion: '2019-02-28', // API version for CreateToken
         });
 
-        accessToken = response.data.access_token;
-        const expiresIn = response.data.expires_in;
-        tokenExpiry = new Date(Date.now() + expiresIn * 1000);
-        console.log('New token obtained, expires in:', expiresIn, 'seconds');
+        const result = await client.request<AliyunTokenResponse>('CreateToken', {}, { method: 'POST' });
 
-        return accessToken;
-    } catch (error) {
-        console.error('Error getting access token:', error);
+        // According to Aliyun documentation, the response structure is:
+        // {
+        //   "Token": {
+        //     "Id": "actual_token_string",
+        //     "ExpireTime": 1600000000 // Unix timestamp in seconds
+        //   },
+        //   "RequestId": "some-request-id"
+        // }
+
+        if (result && result.Token && result.Token.Id && result.Token.ExpireTime) {
+            accessToken = result.Token.Id;
+            // ExpireTime is a Unix timestamp in seconds. Convert to milliseconds for Date constructor.
+            tokenExpiry = new Date(result.Token.ExpireTime * 1000);
+            console.log('New Aliyun token obtained, expires at:', tokenExpiry);
+            console.log('ALIYUN_ACCESS_TOKEN_ID:', accessToken);
+            return accessToken;
+        } else {
+            console.error('Failed to retrieve token from Aliyun response:', result);
+            throw new Error('Invalid token response structure from Aliyun.');
+        }
+
+    } catch (error: any) {
+        console.error('Error getting Aliyun access token:', error.message || error);
+        accessToken = null; // Clear token on error
+        tokenExpiry = null;
         throw error;
     }
 }
 
 // Endpoint to get access token
-app.get('/api/token', async (req, res) => {
+app.get('/api/token', async (req: express.Request, res: express.Response) => {
     try {
         const token = await getAccessToken();
-        res.json({ access_token: token });
+        res.json({ token });
     } catch (error) {
-        console.error('Token error:', error);
-        res.status(500).json({ error: 'Failed to get access token' });
+        console.error('Error in /api/token endpoint:', error);
+        res.status(500).send('Error getting access token');
     }
 });
 
-// Validate audio data
-function validateAudioData(speech: string): { isValid: boolean; error?: string } {
-    if (!speech) {
-        return { isValid: false, error: 'No audio data provided' };
-    }
+// Aliyun ASR (一句话识别) endpoint
+const ALIYUN_ASR_URL = 'https://nls-gateway.cn-shanghai.aliyuncs.com/stream/v1/asr';
 
-    try {
-        const audioBuffer = Buffer.from(speech, 'base64');
-        if (audioBuffer.length < 100) {
-            return { isValid: false, error: 'Audio data too short' };
-        }
-        return { isValid: true };
-    } catch (error) {
-        return { isValid: false, error: 'Invalid base64 audio data' };
-    }
+interface AliyunASRResponse {
+    status: number;
+    result?: string; // Or a more detailed object based on actual Aliyun response
+    message?: string;
+    task_id?: string;
+    // Add other fields from actual response if necessary
+    // Example from docs: {"status":20000000,"message":"SUCCESS","result":"北京 明天 天气 怎么样","task_id":"925AFAD74467459AA999C755B717****"}
 }
 
-// Endpoint for speech recognition
-app.post('/api/speech', async (req, res) => {
+app.post('/api/speech', async (req: express.Request, res: express.Response) => {
+    console.log('Received audio data, size:', req.body.length);
+    console.log('Content-Type:', req.headers['content-type']);
+
+    if (!ALIYUN_APP_KEY) {
+        console.error('Aliyun AppKey is not configured.');
+        return res.status(500).json({ error: 'Server configuration error: AppKey missing' });
+    }
+
     try {
-        console.log('Received speech recognition request');
         const token = await getAccessToken();
-        const { speech } = req.body;
-        
-        // Validate audio data
-        const validation = validateAudioData(speech);
-        if (!validation.isValid) {
-            console.error('Audio validation failed:', validation.error);
-            return res.status(400).json({ error: validation.error });
+        if (!token) {
+            return res.status(500).json({ error: 'Failed to obtain access token' });
         }
 
-        const audioBuffer = Buffer.from(speech, 'base64');
-        console.log('Audio data details:', {
-            lengthInBytes: audioBuffer.length,
-            base64Length: speech.length,
-            approximateDurationMs: (audioBuffer.length / 32000) * 1000 // for 16kHz 16-bit mono
+        const audioData = req.body; // This should be the raw audio buffer
+        const audioFormat = req.headers['x-audio-format'] || 'pcm'; // Client should send this header
+        const sampleRate = req.headers['x-audio-samplerate'] || '16000'; // Client should send this header
+
+        // Construct query parameters for format, sample_rate, etc.
+        // Refer to Aliyun docs for all available parameters: https://help.aliyun.com/zh/isi/developer-reference/api-real-time-speech-recognition#api glist_453_190
+        const queryParams = new URLSearchParams({
+            appkey: ALIYUN_APP_KEY,
+            format: audioFormat as string,
+            sample_rate: sampleRate as string,
+            enable_punctuation_prediction: 'true',
+            enable_inverse_text_normalization: 'true',
+            // Add other parameters as needed, e.g., enable_voice_detection, max_start_silence, etc.
         });
 
-        const options = {
-            method: 'POST',
-            url: 'https://vop.baidu.com/server_api',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            data: {
-                format: "pcm",
-                rate: 16000,
-                channel: 1,
-                cuid: "r2so8p40dI87aL6nHjl4nFzxTALTHvRV",
-                token: token,
-                speech: speech,
-                len: audioBuffer.length
-            }
-        };
-
-        console.log('Sending request to Baidu API...');
-        const response = await axios(options);
-        
-        // Process and validate response
-        if (response.data.err_no === 0) {
-            if (!response.data.result || response.data.result.length === 0) {
-                console.log('No speech detected in the audio');
-                return res.json({ 
-                    status: 'success',
-                    message: 'No speech detected',
-                    result: []
-                });
-            }
-            console.log('Speech recognition successful:', response.data.result);
-            return res.json(response.data);
+        const fullUrl = `${ALIYUN_ASR_URL}?${queryParams.toString()}`;
+        console.log(`Sending audio to Aliyun ASR: ${fullUrl}`);
+        if (ALIYUN_APP_KEY) {
+            console.log(`Using ALIYUN_APP_KEY for header: [${ALIYUN_APP_KEY}], length: ${ALIYUN_APP_KEY.length}`);
+            // Optional: Log char codes if suspecting hidden characters
+            // console.log('AppKey char codes:', ALIYUN_APP_KEY.split('').map(c => c.charCodeAt(0))); 
         } else {
-            console.error('Baidu API error:', response.data);
-            return res.status(400).json({
-                error: 'Speech recognition failed',
-                details: response.data
+            console.log('ALIYUN_APP_KEY is undefined or null before sending header');
+        }
+
+        const aliyunResponse = await axios.post<AliyunASRResponse>(fullUrl, audioData, {
+            headers: {
+                'X-NLS-Token': token,
+                'X-NLS-AppKey': ALIYUN_APP_KEY,
+                'Content-Type': req.headers['content-type'] || 'application/octet-stream', // Use client's content-type or default
+            },
+            // It's important that axios sends the body as raw binary, not JSON-stringified
+            // axios handles Buffer type correctly by default for raw uploads.
+        });
+
+        console.log('Aliyun ASR raw response:', aliyunResponse.data);
+
+        if (aliyunResponse.data && aliyunResponse.data.status === 20000000 && aliyunResponse.data.result) {
+            res.json({ transcript: aliyunResponse.data.result, fullResponse: aliyunResponse.data });
+        } else {
+            console.error('Aliyun ASR error:', aliyunResponse.data);
+            res.status(500).json({ 
+                error: 'Speech recognition failed', 
+                details: aliyunResponse.data.message || 'Unknown error from Aliyun',
+                aliyunStatus: aliyunResponse.data.status,
+                aliyunResponse: aliyunResponse.data
             });
         }
+
     } catch (error: any) {
-        console.error('Speech recognition error:', error.response?.data || error);
-        const errorMessage = error.response?.data?.error_msg || error.message;
-        res.status(500).json({ 
-            error: 'Speech recognition failed',
-            details: errorMessage
-        });
+        console.error('Error in /api/speech endpoint:', error.response ? error.response.data : error.message);
+        if (axios.isAxiosError(error) && error.response) {
+            res.status(error.response.status || 500).json({ error: 'Aliyun API error', details: error.response.data });
+        } else {
+            res.status(500).json({ error: 'Internal server error during speech recognition', details: error.message });
+        }
     }
 });
 
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+    console.log(`Server listening on port ${port}`);
 });

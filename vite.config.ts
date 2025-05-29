@@ -8,6 +8,8 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
+    // Remove or comment out the proxy configuration for /api
+    /*
     proxy: {
       '/api': {
         target: 'https://aip.baidubce.com',
@@ -15,5 +17,6 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
+    */
   },
 });
