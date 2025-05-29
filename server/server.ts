@@ -1,14 +1,14 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import axios from 'axios'; // Re-added for Aliyun HTTP POST
 // import SpeechTranscriber from 'alibabacloud-nls'; // Not used for direct HTTP POST
 import RPCClient from '@alicloud/pop-core'; // Import for token generation
 
-dotenv.config();
+dotenv.config(); // This will look for .env in the Electron project root by default
 
 const app = express();
-const port = 3001;
+const port = 3001; // Consider making this configurable or dynamically assigned
 
 const ALIYUN_AK_ID = process.env.ALIYUN_AK_ID;
 const ALIYUN_AK_SECRET = process.env.ALIYUN_AK_SECRET;
@@ -39,18 +39,18 @@ interface AliyunTokenResponse {
 // Get access token from Aliyun API
 async function getAccessToken() {
     if (accessToken && tokenExpiry && tokenExpiry > new Date()) {
-        console.log('Using cached Aliyun token');
+        console.log('[Server] Using cached Aliyun token');
         return accessToken;
     }
 
     if (!ALIYUN_AK_ID || !ALIYUN_AK_SECRET) {
-        const errMsg = 'Aliyun AccessKey ID or Secret is not configured.';
+        const errMsg = '[Server] Aliyun AccessKey ID or Secret is not configured.';
         console.error(errMsg);
         throw new Error(errMsg);
     }
 
     try {
-        console.log('Fetching new Aliyun access token...');
+        console.log('[Server] Fetching new Aliyun access token...');
 
         const client = new RPCClient({
             accessKeyId: ALIYUN_AK_ID,
@@ -74,16 +74,16 @@ async function getAccessToken() {
             accessToken = result.Token.Id;
             // ExpireTime is a Unix timestamp in seconds. Convert to milliseconds for Date constructor.
             tokenExpiry = new Date(result.Token.ExpireTime * 1000);
-            console.log('New Aliyun token obtained, expires at:', tokenExpiry);
+            console.log('[Server] New Aliyun token obtained, expires at:', tokenExpiry);
             console.log('ALIYUN_ACCESS_TOKEN_ID:', accessToken);
             return accessToken;
         } else {
-            console.error('Failed to retrieve token from Aliyun response:', result);
-            throw new Error('Invalid token response structure from Aliyun.');
+            console.error('[Server] Failed to retrieve token from Aliyun response:', result);
+            throw new Error('[Server] Invalid token response structure from Aliyun.');
         }
 
     } catch (error: any) {
-        console.error('Error getting Aliyun access token:', error.message || error);
+        console.error('[Server] Error getting Aliyun access token:', error.message || error);
         accessToken = null; // Clear token on error
         tokenExpiry = null;
         throw error;
@@ -96,7 +96,7 @@ app.get('/api/token', async (req: express.Request, res: express.Response) => {
         const token = await getAccessToken();
         res.json({ token });
     } catch (error) {
-        console.error('Error in /api/token endpoint:', error);
+        console.error('[Server] Error in /api/token endpoint:', error);
         res.status(500).send('Error getting access token');
     }
 });
@@ -114,11 +114,11 @@ interface AliyunASRResponse {
 }
 
 app.post('/api/speech', async (req: express.Request, res: express.Response) => {
-    console.log('Received audio data, size:', req.body.length);
-    console.log('Content-Type:', req.headers['content-type']);
+    console.log('[Server] Received audio data, size:', req.body.length);
+    console.log('[Server] Content-Type:', req.headers['content-type']);
 
     if (!ALIYUN_APP_KEY) {
-        console.error('Aliyun AppKey is not configured.');
+        console.error('[Server] Aliyun AppKey is not configured.');
         return res.status(500).json({ error: 'Server configuration error: AppKey missing' });
     }
 
@@ -144,7 +144,7 @@ app.post('/api/speech', async (req: express.Request, res: express.Response) => {
         });
 
         const fullUrl = `${ALIYUN_ASR_URL}?${queryParams.toString()}`;
-        console.log(`Sending audio to Aliyun ASR: ${fullUrl}`);
+        console.log(`[Server] Sending audio to Aliyun ASR: ${fullUrl}`);
         if (ALIYUN_APP_KEY) {
             console.log(`Using ALIYUN_APP_KEY for header: [${ALIYUN_APP_KEY}], length: ${ALIYUN_APP_KEY.length}`);
             // Optional: Log char codes if suspecting hidden characters
@@ -163,12 +163,12 @@ app.post('/api/speech', async (req: express.Request, res: express.Response) => {
             // axios handles Buffer type correctly by default for raw uploads.
         });
 
-        console.log('Aliyun ASR raw response:', aliyunResponse.data);
+        console.log('[Server] Aliyun ASR raw response:', aliyunResponse.data);
 
         if (aliyunResponse.data && aliyunResponse.data.status === 20000000 && aliyunResponse.data.result) {
             res.json({ transcript: aliyunResponse.data.result, fullResponse: aliyunResponse.data });
         } else {
-            console.error('Aliyun ASR error:', aliyunResponse.data);
+            console.error('[Server] Aliyun ASR error:', aliyunResponse.data);
             res.status(500).json({ 
                 error: 'Speech recognition failed', 
                 details: aliyunResponse.data.message || 'Unknown error from Aliyun',
@@ -178,7 +178,7 @@ app.post('/api/speech', async (req: express.Request, res: express.Response) => {
         }
 
     } catch (error: any) {
-        console.error('Error in /api/speech endpoint:', error.response ? error.response.data : error.message);
+        console.error('[Server] Error in /api/speech endpoint:', error.response ? error.response.data : error.message);
         if (axios.isAxiosError(error) && error.response) {
             res.status(error.response.status || 500).json({ error: 'Aliyun API error', details: error.response.data });
         } else {
@@ -188,5 +188,5 @@ app.post('/api/speech', async (req: express.Request, res: express.Response) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+    console.log(`[Server] Server listening on port ${port}`);
 });

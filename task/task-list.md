@@ -1,22 +1,22 @@
 # Desktop Dictation App Task List
 
-- [ ] **1. Global Key Event Monitoring**
+- [x] **1. Global Key Event Monitoring**
     - [x] Research libraries/approaches for global hotkey detection (macOS & Windows), especially for the `fn` key.
     - [x] Investigate `fn` key availability and reliability for global binding across different systems/hardware.
     - [x] Identify a suitable alternative key if the `fn` key proves problematic.
-    - [ ] Implement the chosen solution for detecting key press and release events globally.
-- [ ] **2. Audio Recording**
-    - [ ] Select a suitable audio recording library or API compatible with the chosen desktop application framework.
-    - [ ] Implement functionality to start audio capture when the designated key is pressed.
-    - [ ] Implement functionality to stop audio capture when the designated key is released.
-    - [ ] Ensure audio is captured in a format compatible with Aliyun ASR (e.g., PCM, 16000Hz).
-- [ ] **3. Aliyun ASR Integration**
-    - [ ] Decide on the communication strategy:
+    - [x] Implement the chosen solution for detecting key press and release events globally.
+- [x] **2. Audio Recording**
+    - [x] Select a suitable audio recording library or API compatible with the chosen desktop application framework.
+    - [x] Implement functionality to start audio capture when the designated key is pressed.
+    - [x] Implement functionality to stop audio capture when the designated key is released.
+    - [x] Ensure audio is captured in a format compatible with Aliyun ASR (e.g., PCM, 16000Hz).
+- [x] **3. Aliyun ASR Integration**
+    - [x] Decide on the communication strategy:
         - [ ] Option A: Desktop app communicates directly with Aliyun ASR.
-        - [ ] Option B: Desktop app communicates with your existing `server/server.ts`.
-    - [ ] Implement the chosen communication strategy to send audio data and receive transcription.
-    - [ ] Handle API responses, including successful transcriptions and potential errors.
-    - [ ] Manage Aliyun credentials and token refresh securely.
+        - [x] Option B: Desktop app communicates with your existing `server/server.ts` (integrated into Electron app).
+    - [x] Implement the chosen communication strategy to send audio data and receive transcription.
+    - [x] Handle API responses, including successful transcriptions and potential errors.
+    - [x] Manage Aliyun credentials and token refresh securely.
 - [ ] **4. System-Wide Text Insertion**
     - [ ] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
     - [ ] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.

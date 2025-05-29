@@ -1,10 +1,65 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 // const iohook = require('iohook'); // Remove iohook
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
+const { fork } = require('child_process'); // Added for forking the server process
+
+let mainWindow; // Declare mainWindow globally within this module
+let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
+let serverProcess; // Variable to hold the server child process
+
+function startServer() {
+  // For development, we can use ts-node to run the .ts file directly.
+  // For production, you would first compile server.ts to server.js (e.g., in a dist folder)
+  // and then fork the .js file.
+  const serverPath = path.join(__dirname, 'server', 'server.ts');
+  
+  // We need to find the path to ts-node executable
+  // A common way is to use require.resolve('ts-node/dist/bin.js') but that might not always be robust
+  // or rely on it being in PATH for npx.
+  // For simplicity in development, let's try to use `npx ts-node` which assumes npx is available.
+  // A more robust solution for packaging would be to compile the server and run the JS file.
+  
+  // Using fork with 'ts-node' as the command and serverPath as an arg for ts-node
+  // This assumes 'ts-node' is globally available or found via npx-like resolution by fork.
+  // A more direct approach for local ts-node is often `fork(require.resolve('ts-node/dist/bin'), [serverPath], {...});`
+  // but `require.resolve` for binaries can be tricky. So, let's use a simpler `spawn` or a direct fork of compiled js.
+
+  // Let's use fork with node and pass --require ts-node/register
+  // This is often more reliable for local ts-node installations.
+  console.log('[Main] Starting server...');
+  const tsNodeProject = path.join(__dirname, 'tsconfig.server.json'); // Path to server tsconfig
+
+  serverProcess = fork(serverPath, [], {
+    execArgv: ['--require', 'ts-node/register'],
+    stdio: 'inherit',
+    env: { 
+      ...process.env, // Inherit parent environment
+      TS_NODE_PROJECT: tsNodeProject // Tell ts-node which config to use
+    }
+  });
+
+  serverProcess.on('error', (err) => {
+    console.error('[Main] Server process error:', err);
+  });
+
+  serverProcess.on('exit', (code, signal) => {
+    console.log(`[Main] Server process exited with code ${code} and signal ${signal}`);
+    serverProcess = null; // Clear the reference
+  });
+  console.log('[Main] Server process likely started.');
+}
+
+function stopServer() {
+  if (serverProcess) {
+    console.log('[Main] Stopping server process...');
+    serverProcess.kill();
+    serverProcess = null;
+  }
+}
 
 function createWindow () {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -16,8 +71,20 @@ function createWindow () {
 
   mainWindow.loadFile('index.html');
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    isWindowReadyForIPC = true;
+    console.log('Window finished loading. Ready for IPC.');
+  });
+
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
+
+  // Set flags when the window is closed
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    isWindowReadyForIPC = false;
+    console.log('Window closed. IPC disabled.');
+  });
 }
 
 // --- node-global-key-listener Setup ---
@@ -45,13 +112,21 @@ keyListener.addListener((e, down) => {
       if (!rightOptionPressed) {
         rightOptionPressed = true;
         console.log('Right Option key pressed (Name: ' + e.name + ')');
-        // Start recording audio (placeholder)
+        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) { // Check our flag and webContents status
+          mainWindow.webContents.send('start-recording');
+        } else {
+          console.log('Window not ready, not available, or webContents destroyed. Cannot send start-recording IPC.');
+        }
       }
     } else if (e.state === "UP") {
       if (rightOptionPressed) {
         rightOptionPressed = false;
         console.log('Right Option key released (Name: ' + e.name + ')');
-        // Stop recording audio (placeholder)
+        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) { // Check our flag and webContents status
+          mainWindow.webContents.send('stop-recording');
+        } else {
+          console.log('Window not ready, not available, or webContents destroyed. Cannot send stop-recording IPC.');
+        }
       }
     }
   }
@@ -63,24 +138,31 @@ console.log('NOTE: You may need to grant Accessibility permissions to the applic
 
 // --- Electron App Lifecycle ---
 app.whenReady().then(() => {
+  startServer(); // Start the server when the app is ready
   createWindow();
 
   app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      // If server isn't running and we are re-creating window, might want to start server too
+      if (!serverProcess) startServer(); 
+      createWindow();
+    }
   });
 });
 
 app.on('window-all-closed', function () {
+  // On macOS, it's common for applications and their menu bar
+  // to stay active until the user quits explicitly with Cmd + Q
+  // We might not want to stop the server here on macOS unless the app is quitting.
   if (process.platform !== 'darwin') {
+    // stopServer(); // Server will be stopped in 'will-quit'
     app.quit();
   }
 });
 
-// It's good practice to clean up the listener when the app quits,
-// though node-global-key-listener might handle this with its out-of-process server.
 app.on('will-quit', () => {
-  // keyListener.kill(); // Method to stop the listener if available - documentation doesn't explicitly show this.
-  // For now, we assume its out-of-process nature handles cleanup or it's not critical for POC.
+  stopServer(); // Ensure server is stopped when app is quitting
+  // keyListener.kill(); (still commented out)
   console.log('App quitting. Key listener might still be active if its server runs independently.');
 });
 
