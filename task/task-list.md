@@ -1,0 +1,31 @@
+# Desktop Dictation App Task List
+
+- [ ] **1. Global Key Event Monitoring**
+    - [x] Research libraries/approaches for global hotkey detection (macOS & Windows), especially for the `fn` key.
+    - [x] Investigate `fn` key availability and reliability for global binding across different systems/hardware.
+    - [x] Identify a suitable alternative key if the `fn` key proves problematic.
+    - [ ] Implement the chosen solution for detecting key press and release events globally.
+- [ ] **2. Audio Recording**
+    - [ ] Select a suitable audio recording library or API compatible with the chosen desktop application framework.
+    - [ ] Implement functionality to start audio capture when the designated key is pressed.
+    - [ ] Implement functionality to stop audio capture when the designated key is released.
+    - [ ] Ensure audio is captured in a format compatible with Aliyun ASR (e.g., PCM, 16000Hz).
+- [ ] **3. Aliyun ASR Integration**
+    - [ ] Decide on the communication strategy:
+        - [ ] Option A: Desktop app communicates directly with Aliyun ASR.
+        - [ ] Option B: Desktop app communicates with your existing `server/server.ts`.
+    - [ ] Implement the chosen communication strategy to send audio data and receive transcription.
+    - [ ] Handle API responses, including successful transcriptions and potential errors.
+    - [ ] Manage Aliyun credentials and token refresh securely.
+- [ ] **4. System-Wide Text Insertion**
+    - [ ] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
+    - [ ] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.
+- [ ] **5. Application Packaging & Structure**
+    - [ ] Choose a desktop application framework (e.g., Electron, Tauri, or others).
+    - [ ] Set up the basic project structure for the chosen framework.
+    - [ ] Integrate all developed features (key monitoring, audio, ASR, text insertion) into the desktop application.
+    - [ ] Implement build processes for creating distributable versions for macOS.
+    - [ ] Implement build processes for creating distributable versions for Windows.
+- [ ] **6. (Optional) Basic User Interface/Feedback**
+    - [ ] Determine if any minimal UI is needed (e.g., tray icon, status notifications for recording/processing).
+    - [ ] If needed, implement basic UI elements.

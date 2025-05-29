@@ -2,10 +2,15 @@ import React from 'react';
 
 interface TextAreaProps {
   text: string;
+  setText: (text: string) => void;
   isRecording: boolean;
 }
 
-const TextArea: React.FC<TextAreaProps> = ({ text, isRecording }) => {
+const TextArea: React.FC<TextAreaProps> = ({ text, setText, isRecording }) => {
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(event.target.value);
+  };
+
   return (
     <div 
       className={`relative w-full max-w-2xl h-64 md:h-80 bg-white rounded-lg shadow-md p-6 mb-10 transition-all duration-300 ${
@@ -18,13 +23,13 @@ const TextArea: React.FC<TextAreaProps> = ({ text, isRecording }) => {
           <span className="text-sm font-medium text-red-500">录音中...</span>
         </div>
       )}
-      <div className="h-full overflow-y-auto text-lg">
-        {text ? (
-          <p className="whitespace-pre-wrap">{text}</p>
-        ) : (
-          <p className="text-gray-400 italic">请点击开始按钮开始说话...</p>
-        )}
-      </div>
+      <textarea
+        value={text === '请点击开始按钮开始说话...' && !isRecording ? '' : text}
+        onChange={handleChange}
+        placeholder="请点击开始按钮开始说话..."
+        className="w-full h-full text-lg bg-transparent focus:outline-none resize-none overflow-y-auto whitespace-pre-wrap"
+        readOnly={isRecording}
+      />
     </div>
   );
 };

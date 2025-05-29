@@ -46,8 +46,15 @@ export const useSpeechRecognition = () => {
       } else {
         // Stop recording and get the audio blob
         const audioBlob = await stopRecording();
-        setText('Processing audio...');
-        console.log('Audio blob type:', audioBlob.type); // Should be 'audio/pcm'
+        
+        setText(prevText => {
+          if (prevText === 'Recording started...' || prevText.startsWith('Error:') || prevText === '') {
+            return 'Processing audio...';
+          }
+          return prevText; 
+        });
+
+        console.log('Audio blob type:', audioBlob.type);
         console.log('Audio blob size:', audioBlob.size);
 
         // Send to backend for speech recognition
@@ -68,22 +75,48 @@ export const useSpeechRecognition = () => {
         // Aliyun response structure is different from Baidu
         // Server now returns { transcript: "...", fullResponse: {...} } on success
         if (response.data && response.data.transcript) {
-          setText(response.data.transcript);
+          const newTranscript = response.data.transcript.trim();
+          setText(prevText => {
+            if (prevText === 'Processing audio...' || prevText === 'Recording started...' || prevText.startsWith('Error:') || prevText === '') {
+              return newTranscript;
+            } else {
+              return prevText.trimEnd() + ' ' + newTranscript;
+            }
+          });
         } else if (response.data && response.data.error) {
-          setText(`Error: ${response.data.details || response.data.error}`);
+          setText(prevText => {
+            const errorMessage = `Error: ${response.data.details || response.data.error}`.trim();
+            if (prevText && prevText !== 'Processing audio...' && prevText !== 'Recording started...' && !prevText.startsWith('Error:') && prevText !== '') {
+                return prevText.trimEnd() + ' ' + errorMessage;
+            }
+            return errorMessage;
+          });
         } else {
-          setText('Error: Recognition failed. Unexpected response from server.');
+          setText(prevText => {
+            const errorMessage = 'Error: Recognition failed. Unexpected response from server.'.trim();
+            if (prevText && prevText !== 'Processing audio...' && prevText !== 'Recording started...' && !prevText.startsWith('Error:') && prevText !== '') {
+                return prevText.trimEnd() + ' ' + errorMessage;
+            }
+            return errorMessage;
+          });
         }
       }
     } catch (err: any) {
-      console.error('Error:', err);
-      setText(`Error: ${recordingError || err.response?.data?.error || err.message || 'Failed to process audio'}`);
+      console.error('Error in toggleRecording:', err);
+      setText(prevText => {
+        const errorMessage = `Error: ${recordingError || err.response?.data?.error || err.message || 'Failed to process audio'}`.trim();
+        if (prevText && prevText !== 'Recording started...' && prevText !== 'Processing audio...' && !prevText.startsWith('Error:') && prevText !== '') {
+            return prevText.trimEnd() + ' ' + errorMessage;
+        }
+        return errorMessage;
+      });
     }
   }, [isRecording, startRecording, stopRecording, recordingError]);
 
   return {
     isRecording,
     text,
+    setText,
     toggleRecording
   };
 };

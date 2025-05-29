@@ -6,7 +6,7 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import axios from 'axios';
 
 function App() {
-  const { isRecording, text, toggleRecording } = useSpeechRecognition();
+  const { isRecording, text, setText, toggleRecording } = useSpeechRecognition();
 
   // Update page title based on recording state
   useEffect(() => {
@@ -44,7 +44,11 @@ function App() {
         <Header />
         
         <main className="flex-1 w-full max-w-3xl mx-auto flex flex-col items-center justify-center py-8 gap-8">
-          <TextArea text={text} isRecording={isRecording} />
+          <TextArea 
+            text={text} 
+            setText={setText}
+            isRecording={isRecording} 
+          />
           <RecordButton 
             isRecording={isRecording} 
             onToggleRecording={toggleRecording} 
