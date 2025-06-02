@@ -159,6 +159,7 @@ app.post('/api/speech', async (req: express.Request, res: express.Response) => {
                 'X-NLS-AppKey': ALIYUN_APP_KEY,
                 'Content-Type': req.headers['content-type'] || 'application/octet-stream', // Use client's content-type or default
             },
+            timeout: 15000, // 15 seconds timeout
             // It's important that axios sends the body as raw binary, not JSON-stringified
             // axios handles Buffer type correctly by default for raw uploads.
         });

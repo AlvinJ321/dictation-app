@@ -237,41 +237,45 @@ async function sendAudioToBackend(audioBlob) {
         return;
     }
 
-    // const formData = new FormData(); // REMOVE: Sending raw blob instead
-    // formData.append('audio', audioBlob);
-
     try {
         console.log('Sending audio to backend as raw blob...');
         const response = await fetch('http://localhost:3001/api/speech', {
             method: 'POST',
-            body: audioBlob, // MODIFY: Send the blob directly
+            body: audioBlob,
             headers: {
-                'Content-Type': 'audio/pcm', // SET: Explicitly set Content-Type
+                'Content-Type': 'audio/pcm',
                 'X-Audio-Format': 'pcm',
-                'X-Audio-Samplerate': String(targetSampleRate)
+                'X-Audio-SampleRate': String(targetSampleRate)
             }
         });
 
-        if (!response.ok) {
+        console.log('Received response from backend:', response.status, response.statusText);
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Transcription data:', data);
+            if (data.transcript) {
+                console.log('Transcription successful:', data.transcript);
+                if (window.electronAPI && typeof window.electronAPI.sendTextInsertion === 'function') {
+                    window.electronAPI.sendTextInsertion(data.transcript);
+                } else {
+                    console.error('window.electronAPI.sendTextInsertion is not available. Make sure it is exposed in preload.js');
+                }
+            } else if (data.error) {
+                console.error('Backend ASR error:', data.error, data.details || '');
+                // Optionally display this error to the user
+                alert(`ASR Error: ${data.error} - ${data.details || 'No details'}`);
+            } else {
+                console.warn('Received OK response, but no transcript or error in data:', data);
+            }
+        } else {
             const errorText = await response.text();
-            throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            console.error('Backend request failed:', response.status, response.statusText, errorText);
+            alert(`Error from backend: ${response.status} ${response.statusText}. ${errorText}`);
         }
-
-        const result = await response.json(); // Assuming backend sends JSON with transcription
-        console.log('Transcription result:', result);
-        // Here you would typically update the UI or send the text to the main process
-        // For now, we just log it.
-        if (result && result.transcription) {
-            // Example of how you might send it to an element if you had one:
-            // const outputElement = document.getElementById('transcriptionOutput');
-            // if (outputElement) outputElement.textContent = result.transcription;
-            alert(`Transcription: ${result.transcription}`); // Simple alert for now
-        }
-
     } catch (error) {
         console.error('Error sending audio to backend:', error);
-        // Handle error appropriately (e.g., notify user, send to main process)
-        alert(`Error: ${error.message}`);
+        alert(`Failed to send audio for transcription: ${error.message}`);
     }
 }
 

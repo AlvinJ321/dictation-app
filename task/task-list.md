@@ -17,9 +17,9 @@
     - [x] Implement the chosen communication strategy to send audio data and receive transcription.
     - [x] Handle API responses, including successful transcriptions and potential errors.
     - [x] Manage Aliyun credentials and token refresh securely.
-- [ ] **4. System-Wide Text Insertion**
-    - [ ] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
-    - [ ] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.
+- [x] **4. System-Wide Text Insertion**
+    - [x] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
+    - [x] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.
 - [ ] **5. Application Packaging & Structure**
     - [ ] Choose a desktop application framework (e.g., Electron, Tauri, or others).
     - [ ] Set up the basic project structure for the chosen framework.

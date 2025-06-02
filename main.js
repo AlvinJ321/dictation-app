@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
 const { fork } = require('child_process'); // Added for forking the server process
+const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
 
 let mainWindow; // Declare mainWindow globally within this module
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
@@ -164,6 +165,21 @@ app.on('will-quit', () => {
   stopServer(); // Ensure server is stopped when app is quitting
   // keyListener.kill(); (still commented out)
   console.log('App quitting. Key listener might still be active if its server runs independently.');
+});
+
+// Handle text insertion from renderer process
+ipcMain.on('insert-text', (event, text) => {
+  if (typeof text === 'string' && text.length > 0) {
+    console.log(`[Main] Received text to insert: "${text}"`);
+    try {
+      robot.typeString(text);
+      console.log('[Main] Text inserted successfully.');
+    } catch (error) {
+      console.error('[Main] Error inserting text with RobotJS:', error);
+    }
+  } else {
+    console.warn('[Main] Received invalid or empty text for insertion.', text);
+  }
 });
 
 // Removed iohook specific start/stop and registration logic
