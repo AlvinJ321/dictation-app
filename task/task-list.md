@@ -20,6 +20,12 @@
 - [x] **4. System-Wide Text Insertion**
     - [x] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
     - [x] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.
+- [x] **NEW TASK: Permission Workflow**
+    - [x] Display app screen on first launch.
+    - [x] Request microphone access.
+    - [x] Request accessibility access.
+    - [x] On dictate key press, check for permissions.
+    - [x] If permissions are not granted, prompt the user to grant them.
 - [ ] **5. Application Packaging & Structure**
     - [ ] Choose a desktop application framework (e.g., Electron, Tauri, or others).
     - [ ] Set up the basic project structure for the chosen framework.

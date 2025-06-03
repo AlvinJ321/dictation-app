@@ -4,6 +4,7 @@ const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
 const { fork } = require('child_process'); // Added for forking the server process
 const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
+const { systemPreferences, dialog } = require('electron'); // Added systemPreferences and dialog
 
 let mainWindow; // Declare mainWindow globally within this module
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
@@ -102,7 +103,46 @@ const TARGET_KEY_NAME_TERTIARY = 'ALTGR'; // Another possibility
 
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
 
-keyListener.addListener((e, down) => {
+async function checkAndRequestPermissions() {
+  // Microphone Access
+  let micAccess = systemPreferences.getMediaAccessStatus('microphone');
+  console.log('[Main] Initial Microphone Access Status:', micAccess);
+
+  if (micAccess === 'not-determined') {
+    const granted = await systemPreferences.askForMediaAccess('microphone');
+    micAccess = granted ? 'granted' : 'denied';
+    console.log('[Main] Microphone Access after asking:', micAccess);
+  }
+
+  // Removed the custom dialog. If micAccess is not 'granted' here,
+  // it means the user denied it at the system prompt or it was already denied.
+  // The application will proceed, and dictation will be blocked if mic is not available (logged by key listener).
+
+  // Accessibility Access
+  // On macOS, isTrustedAccessibilityClient(true) will prompt the user if access is not granted.
+  // However, it's often better to guide the user to settings if it's not already granted.
+  let accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false); // Check without prompting
+  console.log('[Main] Initial Accessibility Access Status:', accessibilityAccess);
+
+  if (!accessibilityAccess) {
+    // Trigger the system prompt for accessibility access.
+    // This will open System Settings if the user needs to grant permission.
+    console.log('[Main] Accessibility not granted, attempting to trigger system prompt...');
+    systemPreferences.isTrustedAccessibilityClient(true); // This prompts the user.
+    // Re-check after the system prompt. The user might have granted it.
+    accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
+    console.log('[Main] Accessibility Access after system prompt attempt:', accessibilityAccess);
+
+    // If still not granted after the system prompt, we could show a non-intrusive message
+    // or rely on the fact that dictation will be blocked (logged in key listener).
+    // For now, we'll rely on the key listener to block and log if still not granted.
+  }
+  
+  console.log('[Main] Final Accessibility Access Status:', accessibilityAccess);
+  return { mic: micAccess === 'granted', accessibility: accessibilityAccess };
+}
+
+keyListener.addListener(async (e, down) => { // Made async to await permission checks
   // Log all key events to help identify the correct key name and structure
   // console.log(\`Key event: name=${e.name}, state=${e.state}, rawKey=${JSON.stringify(e.rawKey)}, down=${JSON.stringify(down)}\`);
 
@@ -113,7 +153,73 @@ keyListener.addListener((e, down) => {
       if (!rightOptionPressed) {
         rightOptionPressed = true;
         console.log('Right Option key pressed (Name: ' + e.name + ')');
-        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) { // Check our flag and webContents status
+
+        let micPermissionGranted = false;
+        let accessibilityPermissionGranted = false;
+
+        // 1. Check and prompt for Microphone Access
+        let micStatus = systemPreferences.getMediaAccessStatus('microphone');
+        if (micStatus === 'granted') {
+          micPermissionGranted = true;
+        } else if (micStatus === 'not-determined') {
+          console.log('[Main] Microphone access not determined on key press. Prompting...');
+          const grantedAfterPrompt = await systemPreferences.askForMediaAccess('microphone');
+          micPermissionGranted = grantedAfterPrompt;
+          console.log('[Main] Microphone access after key press prompt:', grantedAfterPrompt ? 'granted' : 'denied');
+        } else { // 'denied', 'restricted', etc.
+          console.log('[Main] Microphone access was previously ' + micStatus + ' on key press. Informing user to go to settings.');
+          if (mainWindow) {
+            const { response } = await dialog.showMessageBox(mainWindow, {
+              type: 'warning',
+              title: 'Microphone Access Required',
+              message: `Microphone access is currently ${micStatus}. Please grant access in System Settings > Privacy & Security > Microphone.`,
+              buttons: ['Open System Settings', 'Cancel'],
+              defaultId: 0,
+              cancelId: 1
+            });
+            if (response === 0) {
+              require('electron').shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+            }
+          }
+          micPermissionGranted = false; // Remains false as user needs to act manually
+        }
+
+        // 2. Check and prompt for Accessibility Access
+        let accStatus = systemPreferences.isTrustedAccessibilityClient(false);
+        if (accStatus) {
+          accessibilityPermissionGranted = true;
+        } else {
+          console.log('[Main] Accessibility access not granted on key press. Attempting to prompt...');
+          systemPreferences.isTrustedAccessibilityClient(true); // This call prompts or opens settings
+          // Re-check after the call. This might not reflect immediate changes if settings opened.
+          accessibilityPermissionGranted = systemPreferences.isTrustedAccessibilityClient(false);
+          console.log('[Main] Accessibility access after key press prompt attempt:', accessibilityPermissionGranted);
+          
+          if (!accessibilityPermissionGranted && mainWindow) {
+            console.log('[Main] Accessibility access still not granted after key press prompt. Informing user.');
+            const { response } = await dialog.showMessageBox(mainWindow, {
+                type: 'warning',
+                title: 'Accessibility Access Required',
+                message: 'This application needs Accessibility access. Please enable it in System Settings > Privacy & Security > Accessibility.',
+                buttons: ['Open System Settings', 'Cancel'],
+                defaultId: 0,
+                cancelId: 1
+            });
+            if (response === 0) {
+                require('electron').shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+            }
+          }
+        }
+
+        // 3. Final check before proceeding
+        if (!micPermissionGranted || !accessibilityPermissionGranted) {
+          console.warn('[Main] Dictation blocked. Final Permissions - Microphone: ' + micPermissionGranted + ' (' + micStatus + '), Accessibility: ' + accessibilityPermissionGranted);
+          rightOptionPressed = false; // Reset to allow re-evaluation on next press
+          return; // Stop further action
+        }
+
+        // If all permissions are granted, proceed with sending start-recording
+        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
           mainWindow.webContents.send('start-recording');
         } else {
           console.log('Window not ready, not available, or webContents destroyed. Cannot send start-recording IPC.');
@@ -138,9 +244,13 @@ console.log('NOTE: You may need to grant Accessibility permissions to the applic
 
 
 // --- Electron App Lifecycle ---
-app.whenReady().then(() => {
+app.whenReady().then(async () => { // Made async to await permission checks
+  // It's good practice to check/request permissions after the app is ready
+  // and ideally before the window that might need them is fully visible or interactive.
+  // However, creating the window first allows dialogs to be parented to it.
+  createWindow(); 
+  await checkAndRequestPermissions(); // Check permissions after window is created
   startServer(); // Start the server when the app is ready
-  createWindow();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) {
