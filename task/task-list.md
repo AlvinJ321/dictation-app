@@ -21,17 +21,27 @@
     - [x] Research and select a library or native OS method for simulating keyboard input (cross-platform or OS-specific as needed).
     - [x] Implement logic to programmatically insert the transcribed text into the currently active input field in any application.
 - [x] **NEW TASK: Permission Workflow**
-    - [x] Display app screen on first launch.
+    - [ ] Display app screen on first launch.
     - [x] Request microphone access.
     - [x] Request accessibility access.
     - [x] On dictate key press, check for permissions.
     - [x] If permissions are not granted, prompt the user to grant them.
-- [ ] **5. Application Packaging & Structure**
-    - [ ] Choose a desktop application framework (e.g., Electron, Tauri, or others).
-    - [ ] Set up the basic project structure for the chosen framework.
-    - [ ] Integrate all developed features (key monitoring, audio, ASR, text insertion) into the desktop application.
+- [ ] **5. Alpha App Screen UI Implementation (React & Tailwind CSS)**
+    - [ ] Verify and leverage existing React & Tailwind CSS setup (with Vite) for the UI.
+    - [ ] Create main app window (compact size, potentially non-resizable).
+    - [ ] Implement Header component (logo placeholder, user name/icon placeholder).
+    - [ ] Implement Instructions component (welcome message, OS-specific hotkey: "Right Option" for macOS, "Right Ctrl" for Windows).
+    - [ ] Implement "Explore usage scenarios" button.
+    - [ ] Button functionality: Open `https://httpstat.us/404` in the default browser.
+- [ ] **6. Analytics Data Collection**
+    - [ ] Implement a mechanism (e.g., local storage, simple file logging, or send to a backend if available) to record analytics data points for each transcription attempt.
+    - [ ] Data points to include: User Identifier (Anonymized), Timestamp (all attempts), Recording Duration, Transcription Status (success/failure/cancelled), Error Details (if any), Audio File Size (optional), Transcribed Text Length (character count), App Version, Operating System.
+- [ ] **7. Application Packaging & Structure**
+    - [x] Desktop application framework: Electron (confirmed).
+    - [ ] Confirm and utilize the existing project structure for Electron with React & Tailwind (Vite).
+    - [ ] Integrate all developed features (key monitoring, audio, ASR, text insertion, UI, analytics) into the desktop application.
     - [ ] Implement build processes for creating distributable versions for macOS.
     - [ ] Implement build processes for creating distributable versions for Windows.
-- [ ] **6. (Optional) Basic User Interface/Feedback**
-    - [ ] Determine if any minimal UI is needed (e.g., tray icon, status notifications for recording/processing).
-    - [ ] If needed, implement basic UI elements.
+- [ ] **8. (Optional) Advanced UI/UX Feedback**
+    - [ ] Determine if any further UI feedback is needed beyond the main screen (e.g., tray icon, status notifications for recording/processing/errors).
+    - [ ] If needed, implement these additional UI elements.
