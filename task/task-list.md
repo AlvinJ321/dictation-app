@@ -26,22 +26,67 @@
     - [x] Request accessibility access.
     - [x] On dictate key press, check for permissions.
     - [x] If permissions are not granted, prompt the user to grant them.
-- [ ] **5. Alpha App Screen UI Implementation (React & Tailwind CSS)**
+- [-] **5. Web Frontend Prototype (User Acquisition & Sign-Up Flow)**
+    - [-] **5.1. Landing Page & Download CTA**
+        - [-] Design/Implement basic landing page elements prompting download.
+        - [ ] Implement "Download" button click to navigate/show sign-up gate.
+    - [-] **5.2. Sign-Up Gate Web UI & Frontend Logic (Simulated Backend)**
+        - [-] Sign-up page UI (phone number input, OTP input, WeChat login button - Optional) as per mockup.
+        - [ ] Frontend logic for sign-up form, OTP validation (simulated backend).
+        - [ ] Implement (simulated) redirection to download/success message post-signup.
+- [ ] **6. User Authentication - Backend & Full Integration**
+    - [x] **6.1. Authentication Design & Flow Definition**
+        - [x] Define user journey for sign-up (web) -> Download -> App Sign-in.
+        - [x] Detail pre-download sign-up flow on website (Phone OTP, WeChat - Optional) when user clicks download.
+        - [x] Detail desktop app sign-in/sign-up flow (Phone OTP, WeChat - Optional) on first app launch or when logged out.
+        - [x] Design auto sign-in mechanism for the desktop app for subsequent launches.
+        - [x] Outline account recovery process (e.g., resend OTP for phone, WeChat recovery options - Optional if WeChat auth is not implemented).
+    - [ ] **6.2. Backend Implementation (Authentication Focus)**
+        - [ ] User account management (database schema, secure user data storage).
+        - [ ] Phone OTP service integration: generation, sending, and verification.
+        - [ ] (Optional) WeChat authentication integration: OAuth setup, callback handling, user info retrieval.
+        - [ ] Secure session management for web (sign-up) and desktop.
+        - [ ] Develop API endpoints for:
+            - [ ] User sign-up (phone, WeChat - Optional).
+            - [ ] User login (phone, WeChat - Optional).
+            - [ ] OTP request/resend.
+            - [ ] Logout.
+    - [ ] **6.3. Desktop App Authentication UI & Integration (Electron + React)**
+        - [ ] Sign-in/Sign-up screen UI within Electron app (phone number, OTP input, WeChat option - Optional) as per mockup.
+        - [ ] Integration with backend authentication services (API calls for login, OTP, WeChat - Optional).
+        - [ ] Conditional UI rendering in the main app window (show auth screen or main app content).
+        - [ ] Secure local storage of session tokens/refresh tokens for auto sign-in.
+        - [ ] Display of basic user profile information post-login (e.g., name/avatar from mockups).
+        - [ ] Implement logout functionality (clearing local session, notifying backend).
+    - [ ] **6.4. Integrate Web Frontend with Live Backend Services**
+- [ ] **7. Alpha App Screen UI Implementation (React & Tailwind CSS)**
     - [ ] Verify and leverage existing React & Tailwind CSS setup (with Vite) for the UI.
     - [ ] Create main app window (compact size, potentially non-resizable).
     - [ ] Implement Header component (logo placeholder, user name/icon placeholder).
     - [ ] Implement Instructions component (welcome message, OS-specific hotkey: "Right Option" for macOS, "Right Ctrl" for Windows).
     - [ ] Implement "Explore usage scenarios" button.
     - [ ] Button functionality: Open `https://httpstat.us/404` in the default browser.
-- [ ] **6. Analytics Data Collection**
-    - [ ] Implement a mechanism (e.g., local storage, simple file logging, or send to a backend if available) to record analytics data points for each transcription attempt.
-    - [ ] Data points to include: User Identifier (Anonymized), Timestamp (all attempts), Recording Duration, Transcription Status (success/failure/cancelled), Error Details (if any), Audio File Size (optional), Transcribed Text Length (character count), App Version, Operating System.
-- [ ] **7. Application Packaging & Structure**
+- [ ] **8. Application Packaging & Structure**
     - [x] Desktop application framework: Electron (confirmed).
     - [ ] Confirm and utilize the existing project structure for Electron with React & Tailwind (Vite).
     - [ ] Integrate all developed features (key monitoring, audio, ASR, text insertion, UI, analytics) into the desktop application.
     - [ ] Implement build processes for creating distributable versions for macOS.
     - [ ] Implement build processes for creating distributable versions for Windows.
-- [ ] **8. (Optional) Advanced UI/UX Feedback**
+- [ ] **9. Analytics Data Collection**
+    - [ ] Implement a mechanism (e.g., local storage, simple file logging, or send to a backend if available) to record analytics data points for each transcription attempt.
+    - [ ] Data points to include: User Identifier (Anonymized), Timestamp (all attempts), Recording Duration, Transcription Status (success/failure/cancelled), Error Details (if any), Audio File Size (optional), Transcribed Text Length (character count), App Version, Operating System.
+- [ ] **10. (Optional) Advanced UI/UX Feedback**
     - [ ] Determine if any further UI feedback is needed beyond the main screen (e.g., tray icon, status notifications for recording/processing/errors).
     - [ ] If needed, implement these additional UI elements.
+- [ ] **11. (Lower Priority - Post Task 9) "Try it now" Web Feature**
+    - [ ] **11.1. Design & Flow Definition ("Try it now" Focus)**
+        - [ ] Detail "Try it now" web page functionality (web-based ASR demo, no sign-up required for trial).
+        - [ ] Define user journey interaction between main site and "Try it now" page.
+    - [ ] **11.2. Backend Implementation (If needed for "Try it now")**
+        - [ ] Develop API endpoints for: "Try it now" ASR request (only if proxied through backend, otherwise client-side Aliyun ASR).
+    - [ ] **11.3. "Try it now" Web Page Implementation (Static Site / Frontend)**
+        - [ ] UI for the "Try it now" page (text area, start button, instructions) as per mockup.
+        - [ ] Frontend logic for web-based audio capture (using browser APIs).
+        - [ ] Direct client-side integration with Aliyun ASR service for the demo, or via a lightweight backend proxy if credentials cannot be exposed.
+        - [ ] Display of transcribed text in the web page text area.
+        - [ ] Close/exit functionality for the "Try it now" modal/page.
