@@ -4,8 +4,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   onStartRecording: (callback) => ipcRenderer.on('start-recording', callback),
+  removeStartRecordingListener: (callback) => ipcRenderer.removeListener('start-recording', callback),
   onStopRecording: (callback) => ipcRenderer.on('stop-recording', callback),
-  sendTextInsertion: (text) => ipcRenderer.send('insert-text', text)
+  removeStopRecordingListener: (callback) => ipcRenderer.removeListener('stop-recording', callback),
+  sendTextInsertion: (text) => ipcRenderer.send('insert-text', text),
+  sendAppReady: () => ipcRenderer.send('app-ready'),
   // We can add a send function here if renderer needs to send to main, e.g.:
   // send: (channel, data) => ipcRenderer.send(channel, data)
 });

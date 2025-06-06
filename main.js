@@ -6,9 +6,37 @@ const { fork } = require('child_process'); // Added for forking the server proce
 const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
 const { systemPreferences, dialog } = require('electron'); // Added systemPreferences and dialog
 
-let mainWindow; // Declare mainWindow globally within this module
+let mainWindow; // This will hold the main window reference
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
 let serverProcess; // Variable to hold the server child process
+
+// --- Message Queue ---
+// A queue to hold messages when the renderer is not ready
+const messageQueue = [];
+
+function sendOrQueueIPC(channel, ...args) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed() && isWindowReadyForIPC) {
+    try {
+      mainWindow.webContents.send(channel, ...args);
+      console.log(`[Main] IPC message sent on channel '${channel}'`);
+    } catch (error) {
+      console.error(`[Main] Error sending IPC message on channel '${channel}':`, error);
+      console.log(`[Main] Queuing message for channel '${channel}' due to error.`);
+      messageQueue.push({ channel, args });
+    }
+  } else {
+    console.log(`[Main] Window not ready. Queuing message for channel '${channel}'.`);
+    messageQueue.push({ channel, args });
+  }
+}
+
+function processMessageQueue() {
+  console.log(`[Main] Processing message queue. ${messageQueue.length} messages to send.`);
+  while(messageQueue.length > 0) {
+    const { channel, args } = messageQueue.shift();
+    sendOrQueueIPC(channel, ...args);
+  }
+}
 
 function startServer() {
   // For development, we can use ts-node to run the .ts file directly.
@@ -62,8 +90,11 @@ function stopServer() {
 
 function createWindow () {
   mainWindow = new BrowserWindow({
+    title: 'Voco',
     width: 800,
     height: 600,
+    resizable: false,
+    center: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // nodeIntegration: true, // May not be needed for node-global-key-listener in main
@@ -71,21 +102,38 @@ function createWindow () {
     }
   });
 
-  mainWindow.loadFile('index.html');
+  // Check if the --dev flag was passed
+  const isDev = process.argv.includes('--dev');
+
+  // Load the index.html of the app.
+  if (isDev) {
+    const devUrl = 'http://localhost:5173';
+    
+    // Retry loading the URL until the Vite server is ready
+    const loadDevUrl = () => {
+      mainWindow.loadURL(devUrl).catch((err) => {
+        console.log('Error loading dev URL, retrying in 2 seconds:', err.message);
+        setTimeout(loadDevUrl, 2000);
+      });
+    };
+    
+    loadDevUrl();
+    // mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  }
 
   mainWindow.webContents.on('did-finish-load', () => {
     isWindowReadyForIPC = true;
-    console.log('Window finished loading. Ready for IPC.');
+    console.log('Window finished loading. Ready for IPC. Waiting for app-ready signal...');
+    // The queue will be processed when 'app-ready' is received.
   });
-
-  // Open the DevTools.
-  // mainWindow.webContents.openDevTools();
 
   // Set flags when the window is closed
   mainWindow.on('closed', () => {
     mainWindow = null;
     isWindowReadyForIPC = false;
-    console.log('Window closed. IPC disabled.');
+    console.log('Window closed.');
   });
 }
 
@@ -219,21 +267,13 @@ keyListener.addListener(async (e, down) => { // Made async to await permission c
         }
 
         // If all permissions are granted, proceed with sending start-recording
-        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-          mainWindow.webContents.send('start-recording');
-        } else {
-          console.log('Window not ready, not available, or webContents destroyed. Cannot send start-recording IPC.');
-        }
+        sendOrQueueIPC('start-recording');
       }
     } else if (e.state === "UP") {
       if (rightOptionPressed) {
         rightOptionPressed = false;
         console.log('Right Option key released (Name: ' + e.name + ')');
-        if (isWindowReadyForIPC && mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) { // Check our flag and webContents status
-          mainWindow.webContents.send('stop-recording');
-        } else {
-          console.log('Window not ready, not available, or webContents destroyed. Cannot send stop-recording IPC.');
-        }
+        sendOrQueueIPC('stop-recording');
       }
     }
   }
@@ -277,19 +317,34 @@ app.on('will-quit', () => {
   console.log('App quitting. Key listener might still be active if its server runs independently.');
 });
 
+// Handle 'app-ready' from renderer process
+ipcMain.on('app-ready', (event) => {
+  console.log('[Main] Received app-ready signal. Processing queue...');
+  processMessageQueue();
+});
+
 // Handle text insertion from renderer process
 ipcMain.on('insert-text', (event, text) => {
   if (typeof text === 'string' && text.length > 0) {
     console.log(`[Main] Received text to insert: "${text}"`);
-    try {
-      robot.typeString(text);
-      console.log('[Main] Text inserted successfully.');
-    } catch (error) {
-      console.error('[Main] Error inserting text with RobotJS:', error);
+    if (isWindowReadyForIPC && mainWindow && systemPreferences.isTrustedAccessibilityClient(false)) {
+      try {
+        robot.typeString(text);
+        console.log('[Main] Text inserted successfully.');
+      } catch (error) {
+        console.error('[Main] Error inserting text with RobotJS:', error);
+      }
+    } else {
+      console.warn('[Main] Cannot insert text: window not ready, or accessibility not granted.');
     }
   } else {
     console.warn('[Main] Received invalid or empty text for insertion.', text);
   }
+});
+
+// Handle transcription failure from renderer process
+ipcMain.on('transcription-failed', (event, errorDetails) => {
+  // ... existing code ...
 });
 
 // Removed iohook specific start/stop and registration logic
