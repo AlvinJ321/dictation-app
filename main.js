@@ -5,10 +5,12 @@ const path = require('path');
 const { fork } = require('child_process'); // Added for forking the server process
 const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
 const { systemPreferences, dialog } = require('electron'); // Added systemPreferences and dialog
+const { MainProcessAudio } = require('./src/main/audio');
 
 let mainWindow; // This will hold the main window reference
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
 let serverProcess; // Variable to hold the server child process
+let audioHandler;
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -135,6 +137,9 @@ function createWindow () {
     isWindowReadyForIPC = false;
     console.log('Window closed.');
   });
+
+  // Initialize the audio handler once the window is created
+  audioHandler = new MainProcessAudio(mainWindow);
 }
 
 // --- node-global-key-listener Setup ---
@@ -190,10 +195,7 @@ async function checkAndRequestPermissions() {
   return { mic: micAccess === 'granted', accessibility: accessibilityAccess };
 }
 
-keyListener.addListener(async (e, down) => { // Made async to await permission checks
-  // Log all key events to help identify the correct key name and structure
-  // console.log(\`Key event: name=${e.name}, state=${e.state}, rawKey=${JSON.stringify(e.rawKey)}, down=${JSON.stringify(down)}\`);
-
+keyListener.addListener(async (e, down) => {
   const isTargetKey = e.name === TARGET_KEY_NAME_PRIMARY || e.name === TARGET_KEY_NAME_SECONDARY || e.name === TARGET_KEY_NAME_TERTIARY;
 
   if (isTargetKey) {
@@ -266,14 +268,14 @@ keyListener.addListener(async (e, down) => { // Made async to await permission c
           return; // Stop further action
         }
 
-        // If all permissions are granted, proceed with sending start-recording
-        sendOrQueueIPC('start-recording');
+        // If all permissions are granted, start recording
+        audioHandler.startRecording();
       }
     } else if (e.state === "UP") {
       if (rightOptionPressed) {
         rightOptionPressed = false;
         console.log('Right Option key released (Name: ' + e.name + ')');
-        sendOrQueueIPC('stop-recording');
+        audioHandler.stopRecordingAndProcess();
       }
     }
   }
@@ -317,88 +319,4 @@ app.on('will-quit', () => {
   console.log('App quitting. Key listener might still be active if its server runs independently.');
 });
 
-// Handle 'app-ready' from renderer process
-ipcMain.on('app-ready', (event) => {
-  console.log('[Main] Received app-ready signal. Processing queue...');
-  processMessageQueue();
-});
-
-// Handle text insertion from renderer process
-ipcMain.on('insert-text', (event, text) => {
-  if (typeof text === 'string' && text.length > 0) {
-    console.log(`[Main] Received text to insert: "${text}"`);
-    if (isWindowReadyForIPC && mainWindow && systemPreferences.isTrustedAccessibilityClient(false)) {
-      try {
-        robot.typeString(text);
-        console.log('[Main] Text inserted successfully.');
-      } catch (error) {
-        console.error('[Main] Error inserting text with RobotJS:', error);
-      }
-    } else {
-      console.warn('[Main] Cannot insert text: window not ready, or accessibility not granted.');
-    }
-  } else {
-    console.warn('[Main] Received invalid or empty text for insertion.', text);
-  }
-});
-
-// Handle transcription failure from renderer process
-ipcMain.on('transcription-failed', (event, errorDetails) => {
-  // ... existing code ...
-});
-
-// Removed iohook specific start/stop and registration logic
-
-/* // Old hotcakey code
-app.whenReady().then(async () => {
-  createWindow();
-
-  try {
-    console.log('Activating hotcakey...');
-    await hotcakey.activate();
-    console.log('hotcakey activated.');
-
-    const hotkey = ['F13']; // Changed to F13
-    console.log(`Registering hotkey: ${hotkey.join('+')}`);
-
-    hotcakey.register(hotkey, (event) => {
-      console.log('Raw hotkey event:', JSON.stringify(event, null, 2));
-      const keySequenceString = event.keySequence ? event.keySequence.join(', ') : 'N/A';
-      console.log(`Hotkey event: ${event.type} for key(s) ${keySequenceString} at ${event.time}`);
-      
-      if (event.type === 'keydown') {
-        console.log('F13 key pressed'); // Updated log message
-        // Start recording audio (placeholder)
-      } else if (event.type === 'keyup') {
-        console.log('F13 key released'); // Updated log message
-        // Stop recording audio (placeholder)
-      }
-    });
-    console.log('Hotkey registered.');
-
-  } catch (error) {
-    console.error('Failed to activate or register hotkey with hotcakey:', error);
-  }
-
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    // hotcakey.deactivate(); // Consider deactivating if appropriate
-    app.quit();
-  }
-});
-
-app.on('will-quit', async () => {
-  try {
-    console.log('Deactivating hotcakey...');
-    await hotcakey.deactivate();
-    console.log('hotcakey deactivated.');
-  } catch (error) {
-    console.error('Error deactivating hotcakey:', error);
-  }
-});
-*/ 
+// All IPC listeners are now handled within their respective modules or are no longer needed. 

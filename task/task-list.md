@@ -24,34 +24,41 @@
     - [x] Request accessibility access.
     - [x] On dictate key press, check for permissions.
     - [x] If permissions are not granted, prompt the user to grant them.
-- [ ] **5. User Authentication**
+- [x] **5. User Authentication**
     - [x] **5.1. Authentication Design & Flow Definition**
         - [x] Define user journey for desktop app sign-in.
         - [x] Detail desktop app sign-in flow (Phone OTP, WeChat - Optional) on first app launch or when logged out.
         - [x] Design auto sign-in mechanism for the desktop app for subsequent launches.
         - [x] Outline account recovery process (e.g., resend OTP for phone, WeChat recovery options - Optional if WeChat auth is not implemented).
-    - [ ] **5.2. Desktop App Authentication UI & Integration (Electron + React)**
-        - [ ] Sign-in screen UI within Electron app (phone number, OTP input, WeChat option - Optional) as per mockup.
+    - [x] **5.2. Desktop App Authentication UI & Integration (Electron + React)**
+        - [x] Sign-in screen UI within Electron app (phone number, OTP input, WeChat option - Optional) as per mockup.
         - [ ] Integration with backend authentication services (API calls for login, OTP, logout).
-        - [ ] Conditional UI rendering in the main app window (show auth screen or main app content).
+        - [x] Conditional UI rendering in the main app window (show auth screen or main app content).
         - [ ] Secure local storage of session tokens/refresh tokens for auto sign-in.
-        - [ ] Display of basic user profile information post-login (e.g., name/avatar from mockups).
-        - [ ] Implement logout functionality (clearing local session, notifying backend).
-- [ ] **6. Alpha App Screen UI Implementation (React & Tailwind CSS)**
-    - [ ] Verify and leverage existing React & Tailwind CSS setup (with Vite) for the UI.
-    - [ ] Create main app window (compact size, potentially non-resizable).
-    - [ ] Implement Header component (logo placeholder, user name/icon placeholder).
-    - [ ] Implement Instructions component (welcome message, OS-specific hotkey: "Right Option" for macOS).
-    - [ ] Implement "Explore usage scenarios" button.
-    - [ ] Button functionality: Open `https://httpstat.us/404` in the default browser.
-- [ ] **7. Application Packaging & Structure**
+        - [x] Display of basic user profile information post-login (e.g., name/avatar from mockups).
+        - [x] Implement logout functionality (clearing local session, notifying backend).
+- [x] **6. Alpha App Screen UI Implementation (React & Tailwind CSS)**
+    - [x] Verify and leverage existing React & Tailwind CSS setup (with Vite) for the UI.
+    - [x] Create main app window (compact size, potentially non-resizable).
+    - [x] Implement Header component (logo placeholder, user name/icon placeholder).
+    - [x] Implement Instructions component (welcome message, OS-specific hotkey: "Right Option" for macOS).
+    - [x] Implement "Explore usage scenarios" button.
+    - [x] Button functionality: Open `https://httpstat.us/404` in the default browser.
+- [x] **7. Application Packaging & Structure**
     - [x] Desktop application framework: Electron (confirmed).
-    - [ ] Confirm and utilize the existing project structure for Electron with React & Tailwind (Vite).
-    - [ ] Integrate all developed features (key monitoring, audio, ASR, text insertion, UI, analytics) into the desktop application.
+    - [x] Confirm and utilize the existing project structure for Electron with React & Tailwind (Vite).
+    - [x] Integrate all developed features (key monitoring, audio, ASR, text insertion, UI, analytics) into the desktop application.
     - [ ] Implement build processes for creating distributable versions for macOS.
+    - [ ] Implement build processes for creating distributable versions for Windows.
 - [ ] **8. Analytics Data Collection**
     - [ ] Implement a mechanism (e.g., local storage, simple file logging, or send to a backend if available) to record analytics data points for each transcription attempt.
     - [ ] Data points to include: User Identifier (Anonymized), Timestamp (all attempts), Recording Duration, Transcription Status (success/failure/cancelled), Error Details (if any), Audio File Size (optional), Transcribed Text Length (character count), App Version, Operating System.
-- [ ] **9. (Optional) Advanced UI/UX Feedback**
-    - [ ] Determine if any further UI feedback is needed beyond the main screen (e.g., tray icon, status notifications for recording/processing/errors).
-    - [ ] If needed, implement these additional UI elements.
+- [x] **9. (Optional) Advanced UI/UX Feedback**
+    - [x] Determine if any further UI feedback is needed beyond the main screen (e.g., tray icon, status notifications for recording/processing/errors).
+    - [x] If needed, implement these additional UI elements.
+- [ ] **10. Active Input Field Detection (Cross-Platform)**
+    - [ ] Implement a method to check for an active text input field before sending audio to the Aliyun ASR API.
+    - [ ] For macOS, investigate using AppleScript or native APIs.
+    - [ ] For Windows, investigate using native APIs (e.g., UI Automation).
+    - [ ] If no input field is found, do not call the transcription API to save costs.
+    - [ ] Provide clear user feedback in the UI when no input field is detected after dictation.

@@ -43,6 +43,7 @@
     "electron-store": "^10.0.1",
     "express": "^4.19.2",
     "lucide-react": "^0.513.0",
+    "node-audiorecorder": "^3.0.0",
     "node-global-key-listener": "^0.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
