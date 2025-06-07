@@ -1,96 +1,143 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import apiFetch from '../lib/api';
 
-const SignUpPage: React.FC = () => {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
-  const navigate = useNavigate();
+export default function SignUpPage() {
+  const { login } = useAuth();
+  const [phone, setPhone] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerificationSent, setIsVerificationSent] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [countdown, setCountdown] = useState(0);
 
-  const handleSendOtp = () => {
-    if (!phoneNumber) {
-      alert('Please enter a phone number.');
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  const handleSendVerification = async () => {
+    if (!/^\d{11}$/.test(phone)) {
+      setError('请输入一个有效的11位手机号码。');
       return;
     }
-    console.log(`Simulating OTP send to: ${phoneNumber}`);
-    alert(`Simulating OTP sent to ${phoneNumber}. Please check your console or imagine you received an SMS.`);
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const response = await apiFetch('/send-verification-code', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: phone, type: 'signup' }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || '发送验证码失败。');
+      }
+
+      setIsVerificationSent(true);
+      setCountdown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发生了未知错误。');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSignUp = () => {
-    if (!phoneNumber || !otp) {
-      alert('Please enter both phone number and OTP.');
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationCode) {
+      setError('验证码不能为空。');
       return;
     }
-    console.log(`Simulating sign-up with Phone: ${phoneNumber}, OTP: ${otp}`);
-    // Simulate OTP validation
-    if (otp === '123456') { // Mock OTP
-      alert('Sign-up successful! (Simulated)\nRedirecting to download/success message...');
-      console.log('Simulated redirection to download/success message post-signup.');
-      // TODO: Implement actual redirection or success message display
-      // For now, let's navigate to a placeholder success route or back to landing
-      navigate('/'); // Or a new '/signup-success' route
-    } else {
-      alert('Invalid OTP. Please try again. (Hint: try 123456)');
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const response = await apiFetch('/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          phoneNumber: phone,
+          verificationCode: verificationCode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || '注册失败。');
+      }
+
+      login({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发生了未知错误。');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <h1 style={{ fontSize: '2.5rem', marginBottom: '30px' }}>Create Your Account</h1>
-      
-      <div style={{ width: '100%', maxWidth: '400px', padding: '25px', border: '1px solid #ddd', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <label htmlFor="phone" style={{ display: 'block', textAlign: 'left', marginBottom: '5px', fontWeight: 'bold' }}>Phone Number</label>
-          <input 
-            type="tel" 
-            id="phone"
-            value={phoneNumber} 
-            onChange={(e) => setPhoneNumber(e.target.value)} 
-            placeholder="Enter your phone number"
-            style={{ width: '100%', padding: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
-          />
+    <div className="bg-white flex items-center justify-center h-screen font-sans">
+      <div className="bg-white w-full max-w-sm p-6 relative">
+
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="mb-4 text-4xl font-bold text-blue-600">
+            Logo
+          </div>
         </div>
 
-        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
-          <div style={{ flexGrow: 1 }}>
-            <label htmlFor="otp" style={{ display: 'block', textAlign: 'left', marginBottom: '5px', fontWeight: 'bold' }}>OTP</label>
-            <input 
-              type="text" 
-              id="otp"
-              value={otp} 
-              onChange={(e) => setOtp(e.target.value)} 
-              placeholder="Enter OTP"
-              style={{ width: '100%', padding: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
+        {/* Form */}
+        <form onSubmit={handleAuthSubmit} className="space-y-6">
+          {/* Phone Input Group */}
+          <div className="flex items-center space-x-2">
+            <span className="bg-gray-100 text-gray-600 px-3 py-2.5 rounded-lg font-semibold">+86</span>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="手机号"
+              className="flex-1 p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
+              disabled={isLoading || countdown > 0}
+            />
+            <button
+              type="button"
+              onClick={handleSendVerification}
+              disabled={isLoading || countdown > 0}
+              className="bg-blue-600 text-white px-3 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap disabled:bg-blue-300 disabled:cursor-not-allowed"
+            >
+              {isLoading && !isVerificationSent ? '发送中...' : countdown > 0 ? `${countdown}s` : '获取验证码'}
+            </button>
+          </div>
+
+          {/* Verification Code Input */}
+          <div className="border border-gray-300 rounded-lg">
+            <input
+              type="text"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              placeholder="输入验证码"
+              className="w-full p-2.5 outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
+              disabled={!isVerificationSent}
             />
           </div>
-          <button 
-            onClick={handleSendOtp} 
-            style={{ padding: '12px 15px', fontSize: '0.9rem', backgroundColor: '#5bc0de', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            Send OTP
-          </button>
-        </div>
+          
+          {error && <p className="text-red-500 text-sm text-left px-1">{error}</p>}
 
-        <button 
-          onClick={handleSignUp} 
-          style={{ width: '100%', padding: '15px', fontSize: '1.1rem', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '20px' }}
-        >
-          Sign Up / Verify
-        </button>
-
-        {/* Optional WeChat Login Placeholder */}
-        <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
-          <p style={{ marginBottom: '10px', color: '#666' }}>Or sign up with</p>
-          <button 
-            onClick={() => alert('WeChat Login clicked - Optional feature')} 
-            style={{ padding: '10px 20px', fontSize: '1rem', backgroundColor: '#7bb32e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={!isVerificationSent || isLoading}
+            className="w-full mt-8 py-2.5 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:bg-blue-200"
           >
-            WeChat Login (Optional)
+            {isLoading ? '注册中...' : '注册'}
           </button>
-        </div>
+        </form>
+        
       </div>
-      <Link to="/" style={{ marginTop: '30px', color: '#007bff', textDecoration: 'none' }}>Back to Home</Link>
     </div>
   );
-};
-
-export default SignUpPage; 
+} 

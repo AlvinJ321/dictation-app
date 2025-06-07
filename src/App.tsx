@@ -1,29 +1,29 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import SignInPage from './pages/SignInPage';
 import AppPage from './pages/AppPage';
 import './index.css';
 
-function App() {
-  const [isSignedIn, setIsSignedIn] = useState(true);
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
 
-  const handleSignInSuccess = () => {
-    console.log("handleSignInSuccess triggered");
-    setIsSignedIn(true);
-  };
-
-  const handleLogout = () => {
-    console.log("handleLogout triggered");
-    setIsSignedIn(false);
-  };
+  if (isLoading) {
+    // You can return a loading spinner here
+    return <div>Loading...</div>;
+  }
 
   return (
     <>
-      {isSignedIn ? (
-        <AppPage onLogout={handleLogout} />
-      ) : (
-        <SignInPage onSignInSuccess={handleSignInSuccess} />
-      )}
+      {isAuthenticated ? <AppPage /> : <SignInPage />}
     </>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

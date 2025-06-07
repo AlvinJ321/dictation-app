@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, X } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import apiFetch from '../lib/api';
 
-export default function SignInPage({ onSignInSuccess }: { onSignInSuccess: () => void }) {
+export default function SignInPage() {
+  const { login } = useAuth();
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerificationSent, setIsVerificationSent] = useState(false);
@@ -17,21 +19,32 @@ export default function SignInPage({ onSignInSuccess }: { onSignInSuccess: () =>
   }, [countdown]);
 
   const handleSendVerification = async () => {
-    // Basic validation
     if (!/^\d{11}$/.test(phone)) {
       setError('请输入一个有效的11位手机号码。');
       return;
     }
     setError('');
     setIsLoading(true);
-    console.log('Sending verification code to', phone);
-    // Simulate API call
-    setTimeout(() => {
-      console.log("Mock verification code '123456' sent.");
+
+    try {
+      const response = await apiFetch('/send-verification-code', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: phone, type: 'login' }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || '发送验证码失败。');
+      }
+
       setIsVerificationSent(true);
       setCountdown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发生了未知错误。');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
   
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -42,17 +55,28 @@ export default function SignInPage({ onSignInSuccess }: { onSignInSuccess: () =>
     }
     setError('');
     setIsLoading(true);
-    console.log(`Verifying phone: ${phone} with code: ${verificationCode}`);
-    // Mock verification
-    setTimeout(() => {
-      if (verificationCode === '123456') {
-        console.log('Sign in successful!');
-        onSignInSuccess();
-      } else {
-        setError('验证码不正确。');
+
+    try {
+      const response = await apiFetch('/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          phoneNumber: phone,
+          verificationCode: verificationCode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || '登录失败。');
       }
+
+      login({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发生了未知错误。');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -77,7 +101,7 @@ export default function SignInPage({ onSignInSuccess }: { onSignInSuccess: () =>
               onChange={(e) => setPhone(e.target.value)}
               placeholder="手机号"
               className="flex-1 p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
-              disabled={isLoading || isVerificationSent}
+              disabled={isLoading || countdown > 0}
             />
             <button
               type="button"
