@@ -1,0 +1,62 @@
+# User Authentication Error Handling Test Cases
+
+## OTP Request Step
+
+### Scenario 1: Invalid Phone Number
+- **Precondition:** User is on the login screen.
+- **Action:** User enters a phone number with an incorrect format (e.g., "123", "abcdefg", "123456789012345").
+- **Expected Result:** An inline error message appears below the phone number field, stating "Invalid phone number format." The "Send OTP" button may be disabled until a valid format is entered.
+
+### Scenario 2: Network Error on OTP Request
+- **Precondition:** User has entered a valid phone number.
+- **Action:** User clicks the "Send OTP" button, but the application has no internet connectivity.
+- **Expected Result:** A global error notification (e.g., a toast or alert) appears, with a message like "Network error. Please check your connection and try again."
+
+### Scenario 3: Server Error on OTP Request
+- **Precondition:** User has entered a valid phone number.
+- **Action:** User clicks the "Send OTP" button, and the backend server returns a 5xx error.
+- **Expected Result:** A global error notification appears, with a message like "Something went wrong on our end. Please try again later."
+
+### Scenario 4: Rate Limiting
+- **Precondition:** User has successfully requested an OTP for a phone number.
+- **Action:** User attempts to request another OTP for the same number before the cooldown period (e.g., 60 seconds) has elapsed.
+- **Expected Result:** The "Send OTP" button is in a disabled state, showing a countdown (e.g., "47s"). Clicking it has no effect.
+
+### Scenario 5: Unregistered Phone Number
+- **Precondition:** User is on the login screen.
+- **Action:** User enters a valid but unregistered phone number and clicks "Send OTP".
+- **Expected Result:** An inline error message appears below the phone number field, stating "This phone number is not registered."
+
+---
+
+## Login Step
+
+### Scenario 1: Incorrect/Invalid OTP
+- **Precondition:** User has entered a phone number and received an OTP.
+- **Action:** User enters an OTP that is different from the one sent.
+- **Expected Result:** An inline error message appears below the OTP field, stating "The verification code is incorrect."
+
+### Scenario 2: Expired OTP
+- **Precondition:** User has received an OTP but its validity period has passed.
+- **Action:** User enters the expired OTP.
+- **Expected Result:** An inline error message appears below the OTP field, stating "The verification code has expired. Please request a new one."
+
+### Scenario 3: Empty OTP
+- **Precondition:** User has entered a phone number and is on the OTP input screen.
+- **Action:** User clicks the "Login" button without entering any digits in the OTP field.
+- **Expected Result:** An inline error message appears below the OTP field, stating "Please enter the verification code."
+
+### Scenario 4: Network Error on Login
+- **Precondition:** User has entered a phone number and a (presumably valid) OTP.
+- **Action:** User clicks "Login," but the application has no internet connectivity.
+- **Expected Result:** A global error notification appears with a message like "Network error. Please check your connection and try again."
+
+### Scenario 5: Server Error on Login
+- **Precondition:** User has entered a phone number and a (presumably valid) OTP.
+- **Action:** User clicks "Login," and the backend server returns a 5xx error during OTP validation.
+- **Expected Result:** A global error notification appears with a message like "Something went wrong on our end. Please try again later."
+
+### Scenario 6: Account Lockout
+- **Precondition:** The user's account has been locked by an administrator.
+- **Action:** User successfully completes the OTP verification step.
+- **Expected Result:** The application displays a message like "Your account has been suspended. Please contact support." The user is prevented from logging in.

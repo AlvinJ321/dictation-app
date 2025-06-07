@@ -8,6 +8,8 @@ export default function SignInPage() {
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerificationSent, setIsVerificationSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
+  const [verificationCodeError, setVerificationCodeError] = useState('');
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
 
@@ -19,29 +21,36 @@ export default function SignInPage() {
   }, [countdown]);
 
   const handleSendVerification = async () => {
+    setPhoneError('');
+    setVerificationCodeError('');
+    setError('');
+
     if (!/^\d{11}$/.test(phone)) {
-      setError('请输入一个有效的11位手机号码。');
+      setPhoneError('请输入一个有效的11位手机号码。');
       return;
     }
-    setError('');
     setIsLoading(true);
 
     try {
       const response = await apiFetch('/send-verification-code', {
         method: 'POST',
-        body: JSON.stringify({ phoneNumber: phone, type: 'login' }),
+        body: JSON.stringify({ phoneNumber: phone, intent: 'login' }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || '发送验证码失败。');
+        const data = await response.json().catch(() => ({})); // Gracefully handle non-JSON responses
+        if (response.status === 404) {
+          setPhoneError(data.message || '该手机号码未注册。');
+        } else {
+          setError(data.message || '发送验证码失败。');
+        }
+        return;
       }
-
+      
       setIsVerificationSent(true);
       setCountdown(60);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发生了未知错误。');
+      setError(err instanceof Error ? err.message : '网络错误，请稍后重试。');
     } finally {
       setIsLoading(false);
     }
@@ -49,31 +58,41 @@ export default function SignInPage() {
   
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setVerificationCodeError('');
+    setError('');
+
     if (!verificationCode) {
-      setError('验证码不能为空。');
+      setVerificationCodeError('验证码不能为空。');
       return;
     }
-    setError('');
     setIsLoading(true);
 
     try {
-      const response = await apiFetch('/login', {
+      const response = await apiFetch('/verify', {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: phone,
           verificationCode: verificationCode,
+          intent: 'login',
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || '登录失败。');
+        if (data.message && (data.message.includes('incorrect') || data.message.includes('invalid'))) {
+          setVerificationCodeError('验证码不正确。');
+        } else if (data.message && data.message.includes('expired')) {
+          setVerificationCodeError('验证码已过期，请重新获取。');
+        } else {
+          setError(data.message || '登录失败。');
+        }
+        return;
       }
 
       login({ accessToken: data.accessToken, refreshToken: data.refreshToken });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发生了未知错误。');
+      setError(err instanceof Error ? err.message : '网络错误，请稍后重试。');
     } finally {
       setIsLoading(false);
     }
@@ -112,6 +131,7 @@ export default function SignInPage() {
               {isLoading && !isVerificationSent ? '发送中...' : countdown > 0 ? `${countdown}s` : '获取验证码'}
             </button>
           </div>
+          {phoneError && <p className="text-red-500 text-sm text-left px-1">{phoneError}</p>}
 
           {/* Verification Code Input */}
           <div className="border border-gray-300 rounded-lg">
@@ -124,8 +144,9 @@ export default function SignInPage() {
               disabled={!isVerificationSent}
             />
           </div>
+          {verificationCodeError && <p className="text-red-500 text-sm text-left px-1">{verificationCodeError}</p>}
           
-          {error && <p className="text-red-500 text-sm text-left px-1">{error}</p>}
+          {error && <p className="text-red-500 text-sm text-center px-1">{error}</p>}
 
           {/* Submit Button */}
           <button
