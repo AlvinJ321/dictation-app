@@ -31,13 +31,13 @@ export default function AppPage() {
     };
 
     // Listen for status updates from the main process
-    window.electronAPI.onRecordingStatus(handleStatusChange);
-    window.electronAPI.onTranscriptionResult(handleTranscriptionResult);
+    window.electron.onRecordingStatus(handleStatusChange);
+    window.electron.onTranscriptionResult(handleTranscriptionResult);
 
     return () => {
       // Cleanup listeners
-      window.electronAPI.removeRecordingStatusListener(handleStatusChange);
-      window.electronAPI.removeTranscriptionResultListener(handleTranscriptionResult);
+      window.electron.removeRecordingStatusListener(handleStatusChange);
+      window.electron.removeTranscriptionResultListener(handleTranscriptionResult);
     };
   }, []);
 

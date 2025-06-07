@@ -1,27 +1,34 @@
-const API_BASE_URL = 'http://localhost:3002/api';
+import { getTokens, setTokens, clearTokens } from './store';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  throw new Error(
+    'VITE_API_BASE_URL is not defined. Please check your .env file.'
+  );
+}
 
 function handleForcedLogout() {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
+  clearTokens();
   // Reload the page to reset the application state
   window.location.reload();
 }
 
 async function refreshToken() {
-  const currentRefreshToken = localStorage.getItem('refreshToken');
-  if (!currentRefreshToken) {
+  const tokens = await getTokens();
+  if (!tokens || !tokens.refreshToken) {
     console.log('No refresh token available, forcing logout.');
     // No need to call handleForcedLogout here, as the caller will handle the error
     return null;
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/refresh-token`, {
+    const response = await fetch(`${API_BASE_URL}/api/refresh-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ refreshToken: currentRefreshToken }),
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
     });
 
     if (!response.ok) {
@@ -29,7 +36,15 @@ async function refreshToken() {
     }
 
     const data = await response.json();
-    localStorage.setItem('accessToken', data.accessToken);
+    // Assuming the refresh token might be rotated as well
+    if (data.refreshToken) {
+        setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    } else {
+        const currentTokens = await getTokens();
+        if(currentTokens){
+            setTokens({ accessToken: data.accessToken, refreshToken: currentTokens.refreshToken });
+        }
+    }
     return data.accessToken;
   } catch (error) {
     console.error('Could not refresh token:', error);
@@ -40,7 +55,8 @@ async function refreshToken() {
 }
 
 async function apiFetch(url: string, options: RequestInit = {}) {
-  let accessToken = localStorage.getItem('accessToken');
+  const tokens = await getTokens();
+  let accessToken = tokens ? tokens.accessToken : null;
 
   const headers = new Headers(options.headers || {});
   if (accessToken) {
@@ -50,7 +66,7 @@ async function apiFetch(url: string, options: RequestInit = {}) {
       headers.set('Content-Type', 'application/json');
   }
 
-  let response = await fetch(`${API_BASE_URL}${url}`, {
+  let response = await fetch(`${API_BASE_URL}/api${url}`, {
     ...options,
     headers,
   });
@@ -60,7 +76,7 @@ async function apiFetch(url: string, options: RequestInit = {}) {
     if (newAccessToken) {
       headers.set('Authorization', `Bearer ${newAccessToken}`);
       // Retry the request with the new token
-      response = await fetch(`${API_BASE_URL}${url}`, {
+      response = await fetch(`${API_BASE_URL}/api${url}`, {
         ...options,
         headers,
       });

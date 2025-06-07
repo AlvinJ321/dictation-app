@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiFetch from '../lib/api';
+import { getTokens, setTokens, clearTokens } from '../lib/store';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -22,12 +23,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const checkAuthStatus = async () => {
-      const accessToken = localStorage.getItem('accessToken');
-      if (accessToken) {
-        // Here you might want to verify the token with the backend
-        // For now, we'll assume if a token exists, the user is authenticated.
-        setIsAuthenticated(true);
-        // You could also fetch user profile here and setUser
+      const tokens = await getTokens();
+      if (tokens && tokens.accessToken) {
+        try {
+          const response = await apiFetch('/me');
+          if (!response.ok) {
+            throw new Error('Failed to fetch user profile.');
+          }
+          const userData = await response.json();
+          setUser(userData);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error('Authentication check failed:', error);
+          setIsAuthenticated(false);
+          setUser(null);
+        }
       }
       setIsLoading(false);
     };
@@ -35,26 +45,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (tokens: { accessToken: string; refreshToken: string }) => {
-    localStorage.setItem('accessToken', tokens.accessToken);
-    localStorage.setItem('refreshToken', tokens.refreshToken);
+    setTokens(tokens);
     setIsAuthenticated(true);
-    // You might want to decode the token to get user info or fetch it from an endpoint
+    const fetchUser = async () => {
+      try {
+        const response = await apiFetch('/me');
+        if (!response.ok) throw new Error('Failed to fetch user');
+        const userData = await response.json();
+        setUser(userData);
+      } catch (error) {
+        console.error("Failed to fetch user on login", error);
+        setUser(null);
+      }
+    };
+    fetchUser();
   };
 
   const logout = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (refreshToken) {
+    const tokens = await getTokens();
+    if (tokens && tokens.refreshToken) {
       try {
         await apiFetch('/logout', {
           method: 'POST',
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
         });
       } catch (error) {
         console.error('Logout API call failed:', error);
       }
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearTokens();
     setIsAuthenticated(false);
     setUser(null);
   };

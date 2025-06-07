@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
 // const iohook = require('iohook'); // Remove iohook
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
@@ -11,6 +11,8 @@ let mainWindow; // This will hold the main window reference
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
 let serverProcess; // Variable to hold the server child process
 let audioHandler;
+let keyListener;
+let rightOptionPressed = false; // Moved to top-level scope
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -44,13 +46,6 @@ function startServer() {
   // For development, we can use ts-node to run the .ts file directly.
   // For production, you would first compile server.ts to server.js (e.g., in a dist folder)
   // and then fork the .js file.
-  const serverPath = path.join(__dirname, 'server', 'server.ts');
-  
-  // We need to find the path to ts-node executable
-  // A common way is to use require.resolve('ts-node/dist/bin.js') but that might not always be robust
-  // or rely on it being in PATH for npx.
-  // For simplicity in development, let's try to use `npx ts-node` which assumes npx is available.
-  // A more robust solution for packaging would be to compile the server and run the JS file.
   
   // Using fork with 'ts-node' as the command and serverPath as an arg for ts-node
   // This assumes 'ts-node' is globally available or found via npx-like resolution by fork.
@@ -120,7 +115,7 @@ function createWindow () {
     };
     
     loadDevUrl();
-    // mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools(); // Temporarily disabled for cleaner launch
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
@@ -142,16 +137,8 @@ function createWindow () {
   audioHandler = new MainProcessAudio(mainWindow);
 }
 
-// --- node-global-key-listener Setup ---
-const keyListener = new GlobalKeyboardListener();
-
-// Variable to track if the target key is pressed
-let rightOptionPressed = false;
-
-// Key names can vary; common ones for Option keys are 'RIGHT ALT', 'ALTGR', 'RIGHT OPTION'
-// We'll log all key events initially to discover the correct name if needed.
-const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Primary guess for Right Option
-const TARGET_KEY_NAME_SECONDARY = 'RIGHT OPTION'; // Secondary guess
+const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working value from logs
+const TARGET_KEY_NAME_SECONDARY = 'RIGHT OPTION'; // Fallback
 const TARGET_KEY_NAME_TERTIARY = 'ALTGR'; // Another possibility
 
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
@@ -195,115 +182,118 @@ async function checkAndRequestPermissions() {
   return { mic: micAccess === 'granted', accessibility: accessibilityAccess };
 }
 
-keyListener.addListener(async (e, down) => {
-  const isTargetKey = e.name === TARGET_KEY_NAME_PRIMARY || e.name === TARGET_KEY_NAME_SECONDARY || e.name === TARGET_KEY_NAME_TERTIARY;
+// This method will be called when Electron has finished
+// initialization and is ready to create browser windows.
+// Some APIs can only be used after this event occurs.
+app.whenReady().then(async () => {
+  // --- Electron Store and IPC Handlers for Auth ---
+  const { default: Store } = await import('electron-store');
+  const store = new Store();
 
-  if (isTargetKey) {
-    if (e.state === "DOWN") {
-      if (!rightOptionPressed) {
+  ipcMain.handle('get-tokens', () => {
+    try {
+      const encryptedAccessToken = store.get('accessToken');
+      const encryptedRefreshToken = store.get('refreshToken');
+
+      const accessToken =
+        encryptedAccessToken && safeStorage.isEncryptionAvailable()
+          ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
+          : undefined;
+      const refreshToken =
+        encryptedRefreshToken && safeStorage.isEncryptionAvailable()
+          ? safeStorage.decryptString(Buffer.from(encryptedRefreshToken, 'latin1'))
+          : undefined;
+
+      return { accessToken, refreshToken };
+    } catch (error) {
+      console.error('Failed to decrypt tokens:', error);
+      // It's safer to clear corrupted tokens
+      store.delete('accessToken');
+      store.delete('refreshToken');
+      return { accessToken: undefined, refreshToken: undefined };
+    }
+  });
+
+  ipcMain.on('set-tokens', (event, tokens) => {
+    if (safeStorage.isEncryptionAvailable()) {
+      // We store the encrypted buffer as a latin1 string to avoid encoding issues.
+      const encryptedAccessToken = safeStorage.encryptString(tokens.accessToken).toString('latin1');
+      const encryptedRefreshToken = safeStorage.encryptString(tokens.refreshToken).toString('latin1');
+      store.set('accessToken', encryptedAccessToken);
+      store.set('refreshToken', encryptedRefreshToken);
+    } else {
+        // Fallback for systems where encryption is not available
+        console.warn("safeStorage is not available. Storing tokens unencrypted.");
+        store.set('accessToken', tokens.accessToken);
+        store.set('refreshToken', tokens.refreshToken);
+    }
+  });
+
+  ipcMain.on('clear-tokens', () => {
+    store.delete('accessToken');
+    store.delete('refreshToken');
+  });
+
+  // Start the server process
+  // startServer(); // DISABLED TO PREVENT PORT CONFLICT
+  
+  // --- Global Key Listener Setup ---
+  keyListener = new GlobalKeyboardListener();
+
+  keyListener.addListener(async (e, down) => {
+    // Correctly check for the key name and state
+    const isTargetKey = e.name === TARGET_KEY_NAME_PRIMARY || e.name === TARGET_KEY_NAME_SECONDARY || e.name === TARGET_KEY_NAME_TERTIARY;
+
+    if (isTargetKey) {
+      if (e.state === "DOWN" && !rightOptionPressed) {
         rightOptionPressed = true;
-        console.log('Right Option key pressed (Name: ' + e.name + ')');
+        console.log(`Right Option key down (Name: ${e.name})`);
+        
+        // Simplified and direct permission check
+        const micAccess = systemPreferences.getMediaAccessStatus('microphone');
+        const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
 
-        let micPermissionGranted = false;
-        let accessibilityPermissionGranted = false;
-
-        // 1. Check and prompt for Microphone Access
-        let micStatus = systemPreferences.getMediaAccessStatus('microphone');
-        if (micStatus === 'granted') {
-          micPermissionGranted = true;
-        } else if (micStatus === 'not-determined') {
-          console.log('[Main] Microphone access not determined on key press. Prompting...');
-          const grantedAfterPrompt = await systemPreferences.askForMediaAccess('microphone');
-          micPermissionGranted = grantedAfterPrompt;
-          console.log('[Main] Microphone access after key press prompt:', grantedAfterPrompt ? 'granted' : 'denied');
-        } else { // 'denied', 'restricted', etc.
-          console.log('[Main] Microphone access was previously ' + micStatus + ' on key press. Informing user to go to settings.');
-          if (mainWindow) {
-            const { response } = await dialog.showMessageBox(mainWindow, {
-              type: 'warning',
-              title: 'Microphone Access Required',
-              message: `Microphone access is currently ${micStatus}. Please grant access in System Settings > Privacy & Security > Microphone.`,
-              buttons: ['Open System Settings', 'Cancel'],
-              defaultId: 0,
-              cancelId: 1
-            });
-            if (response === 0) {
-              require('electron').shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
-            }
-          }
-          micPermissionGranted = false; // Remains false as user needs to act manually
+        if (micAccess !== 'granted' || !accessibilityAccess) {
+          console.warn(`Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
+          // We can show a dialog here if we want, but for now, just log and block.
+          rightOptionPressed = false; // Reset state to allow trying again
+          return;
         }
-
-        // 2. Check and prompt for Accessibility Access
-        let accStatus = systemPreferences.isTrustedAccessibilityClient(false);
-        if (accStatus) {
-          accessibilityPermissionGranted = true;
-        } else {
-          console.log('[Main] Accessibility access not granted on key press. Attempting to prompt...');
-          systemPreferences.isTrustedAccessibilityClient(true); // This call prompts or opens settings
-          // Re-check after the call. This might not reflect immediate changes if settings opened.
-          accessibilityPermissionGranted = systemPreferences.isTrustedAccessibilityClient(false);
-          console.log('[Main] Accessibility access after key press prompt attempt:', accessibilityPermissionGranted);
-          
-          if (!accessibilityPermissionGranted && mainWindow) {
-            console.log('[Main] Accessibility access still not granted after key press prompt. Informing user.');
-            const { response } = await dialog.showMessageBox(mainWindow, {
-                type: 'warning',
-                title: 'Accessibility Access Required',
-                message: 'This application needs Accessibility access. Please enable it in System Settings > Privacy & Security > Accessibility.',
-                buttons: ['Open System Settings', 'Cancel'],
-                defaultId: 0,
-                cancelId: 1
-            });
-            if (response === 0) {
-                require('electron').shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
-            }
-          }
-        }
-
-        // 3. Final check before proceeding
-        if (!micPermissionGranted || !accessibilityPermissionGranted) {
-          console.warn('[Main] Dictation blocked. Final Permissions - Microphone: ' + micPermissionGranted + ' (' + micStatus + '), Accessibility: ' + accessibilityPermissionGranted);
-          rightOptionPressed = false; // Reset to allow re-evaluation on next press
-          return; // Stop further action
-        }
-
-        // If all permissions are granted, start recording
+        
+        console.log('Permissions OK. Starting recording.');
         audioHandler.startRecording();
-      }
-    } else if (e.state === "UP") {
-      if (rightOptionPressed) {
+
+      } else if (e.state === "UP" && rightOptionPressed) {
         rightOptionPressed = false;
-        console.log('Right Option key released (Name: ' + e.name + ')');
+        console.log(`Right Option key up (Name: ${e.name})`);
         audioHandler.stopRecordingAndProcess();
       }
     }
-  }
-});
+  });
 
-console.log('Global key listener added. Press Right Option key to test.');
-console.log('NOTE: You may need to grant Accessibility permissions to the application (or your terminal if running in dev mode).');
+  console.log('Global key listener added. Press Right Option key to test.');
+  console.log('NOTE: You may need to grant Accessibility permissions to the application (or your terminal if running in dev mode).');
 
+  await checkAndRequestPermissions();
+  // Start the server process
+  // startServer(); // DISABLED TO PREVENT PORT CONFLICT
+  createWindow();
 
-// --- Electron App Lifecycle ---
-app.whenReady().then(async () => { // Made async to await permission checks
-  // It's good practice to check/request permissions after the app is ready
-  // and ideally before the window that might need them is fully visible or interactive.
-  // However, creating the window first allows dialogs to be parented to it.
-  createWindow(); 
-  await checkAndRequestPermissions(); // Check permissions after window is created
-  startServer(); // Start the server when the app is ready
-
-  app.on('activate', function () {
+  app.on('activate', () => {
+    // On macOS it's common to re-create a window in the app when the
+    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
-      // If server isn't running and we are re-creating window, might want to start server too
-      if (!serverProcess) startServer(); 
       createWindow();
     }
   });
+
+  ipcMain.on('app-ready', () => {
+    console.log('[Main] Received app-ready signal from renderer.');
+    processMessageQueue();
+  });
 });
 
-app.on('window-all-closed', function () {
+app.on('window-all-closed', () => {
   // On macOS, it's common for applications and their menu bar
   // to stay active until the user quits explicitly with Cmd + Q
   // We might not want to stop the server here on macOS unless the app is quitting.
@@ -314,9 +304,12 @@ app.on('window-all-closed', function () {
 });
 
 app.on('will-quit', () => {
-  stopServer(); // Ensure server is stopped when app is quitting
-  // keyListener.kill(); (still commented out)
-  console.log('App quitting. Key listener might still be active if its server runs independently.');
+  // Unregister all listeners.
+  // iohook.removeAllListeners(); // iohook is removed
+  // iohook.stop();
+  keyListener.kill();
+  // stopServer(); // DISABLED TO PREVENT PORT CONFLICT
+  console.log('App quitting, key listener stopped.');
 });
 
 // All IPC listeners are now handled within their respective modules or are no longer needed. 

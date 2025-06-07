@@ -34,7 +34,7 @@
         - [x] Sign-in screen UI within Electron app (phone number, OTP input, WeChat option - Optional) as per mockup.
         - [x] Integration with backend authentication services (API calls for login, OTP, logout).
         - [x] Conditional UI rendering in the main app window (show auth screen or main app content).
-        - [ ] Secure local storage of session tokens/refresh tokens for auto sign-in.
+        - [x] Secure local storage of session tokens/refresh tokens for auto sign-in.
         - [x] Display of basic user profile information post-login (e.g., name/avatar from mockups).
         - [x] Implement logout functionality (clearing local session, notifying backend).
 - [x] **6. Alpha App Screen UI Implementation (React & Tailwind CSS)**
