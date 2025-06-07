@@ -62,3 +62,11 @@
     - [ ] For Windows, investigate using native APIs (e.g., UI Automation).
     - [ ] If no input field is found, do not call the transcription API to save costs.
     - [ ] Provide clear user feedback in the UI when no input field is detected after dictation.
+- [ ] **11. Handle >60s Recording for ASR Limit**
+    - [ ] Implement a timer that starts with the recording.
+    - [ ] At the 50-second mark, provide user feedback (e.g., a subtle visual or audio cue) that the recording limit is approaching (10 seconds left).
+    - [ ] At the 60-second mark, automatically stop the recording.
+    - [ ] Immediately send the 60-second audio chunk for transcription.
+    - [ ] After transcription, insert the 60 seconds transcribed text into the input field. Provide a subtle feedback to the user (design to be discussed) that includes:
+        - A message stating the recording stopped at the 60-second limit.
+        - A reminder that they can press the hotkey again to continue dictating.
