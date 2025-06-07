@@ -19,6 +19,8 @@ class MainProcessAudio {
             channels: 1,
             rate: 16000,
             type: 'wav',
+            silence: 0,
+            keepSilence: true
         };
         this.audioRecorder = new AudioRecorder(options, console);
     }
