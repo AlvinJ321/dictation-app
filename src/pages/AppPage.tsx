@@ -8,7 +8,7 @@ export default function AppPage() {
   const { logout, user } = useAuth();
   const [status, setStatus] = useState<Status>('idle');
   // Use user info from auth context, with a fallback
-  const userName = user?.userName || 'User';
+  const userName = user?.username || 'User';
 
   useEffect(() => {
     const handleStatusChange = (newStatus: Status) => {
@@ -66,7 +66,11 @@ export default function AppPage() {
         {/* User Menu */}
         <div className="flex items-center gap-2">
           <span className="text-gray-700">{userName}</span>
-          <User className="w-5 h-5 text-gray-500" />
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="User Avatar" className="w-6 h-6 rounded-full" />
+          ) : (
+            <User className="w-5 h-5 text-gray-500" />
+          )}
           <button onClick={logout} className="ml-2">
               <LogOut className="w-5 h-5 text-gray-500 hover:text-red-500" />
           </button>

@@ -7,7 +7,9 @@ interface AuthContextType {
   user: {
     userId: string;
     phoneNumber: string;
-    userName: string;
+    username: string;
+    avatarUrl: string;
+    avatarKey: string;
   } | null;
   login: (tokens: { accessToken: string; refreshToken: string }) => void;
   logout: () => void;
@@ -18,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<AuthContextType['user']>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const tokens = await getTokens();
       if (tokens && tokens.accessToken) {
         try {
-          const response = await apiFetch('/me');
+          const response = await apiFetch('/profile');
           if (!response.ok) {
             throw new Error('Failed to fetch user profile.');
           }
@@ -49,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(true);
     const fetchUser = async () => {
       try {
-        const response = await apiFetch('/me');
+        const response = await apiFetch('/profile');
         if (!response.ok) throw new Error('Failed to fetch user');
         const userData = await response.json();
         setUser(userData);
