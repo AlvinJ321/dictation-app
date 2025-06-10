@@ -6,12 +6,15 @@ const { app, safeStorage } = require('electron');
 const robot = require('@hurdlegroup/robotjs');
 
 class MainProcessAudio {
-    constructor(mainWindow, store) {
-        this.mainWindow = mainWindow;
+    constructor(sendIPC, store, player) {
+        this.sendIPC = sendIPC;
         this.store = store;
+        this.player = player;
         this.audioRecorder = null;
         this.isRecording = false;
         this.fileName = path.join(app.getPath('temp'), 'recording.wav');
+        this.recordingTimer = null;
+        this.warningTimer = null;
 
         const options = {
             program: 'sox',
@@ -34,7 +37,7 @@ class MainProcessAudio {
 
         console.log('[MainAudio] Starting recording...');
         this.isRecording = true;
-        this.mainWindow.webContents.send('recording-status', 'recording');
+        this.sendIPC('recording-status', 'recording');
 
         const fileStream = fs.createWriteStream(this.fileName, { encoding: 'binary' });
         this.audioRecorder.start().stream().pipe(fileStream);
@@ -42,28 +45,49 @@ class MainProcessAudio {
         fileStream.on('finish', () => {
             console.log('[MainAudio] Finished writing to file.');
         });
+
+        // Set a timeout to warn the user at 50 seconds
+        this.warningTimer = setTimeout(() => {
+            console.log('[MainAudio] 50 seconds reached, warning user.');
+            this.sendIPC('recording-status', 'warning');
+            this.player.play(path.join(__dirname, '../../sfx/50seconds.mp3'), (err) => {
+                if (err) console.error('Error playing 50-second warning sound:', err);
+            });
+        }, 50000);
+
+        // Set a timeout to automatically stop recording at 60 seconds
+        this.recordingTimer = setTimeout(() => {
+            console.log('[MainAudio] 60 seconds reached, stopping recording.');
+            this.stopRecordingAndProcess({ maxedOut: true });
+        }, 60000);
     }
 
-    async stopRecordingAndProcess() {
+    async stopRecordingAndProcess(options = {}) {
         if (!this.isRecording) {
             console.log('[MainAudio] Not recording.');
             return;
         }
 
+        // Clear timers when stopping manually or automatically
+        clearTimeout(this.warningTimer);
+        clearTimeout(this.recordingTimer);
+        this.warningTimer = null;
+        this.recordingTimer = null;
+
         console.log('[MainAudio] Stopping recording...');
         this.isRecording = false;
-        this.mainWindow.webContents.send('recording-status', 'processing');
+        this.sendIPC('recording-status', 'processing');
         this.audioRecorder.stop();
 
         try {
             const encryptedAccessToken = this.store.get('accessToken');
             if (!encryptedAccessToken) {
                 console.log('[MainAudio] No access token found. Blocking transcription.');
-                this.mainWindow.webContents.send('transcription-result', {
+                this.sendIPC('transcription-result', {
                     success: false,
                     error: 'You must be logged in to transcribe.'
                 });
-                this.mainWindow.webContents.send('recording-status', 'error');
+                this.sendIPC('recording-status', 'error');
                 return;
             }
             
@@ -85,9 +109,10 @@ class MainProcessAudio {
 
             if (response.data && response.data.transcript) {
                 console.log('[MainAudio] Transcription success:', response.data.transcript);
-                this.mainWindow.webContents.send('transcription-result', {
+                this.sendIPC('transcription-result', {
                     success: true,
-                    text: response.data.transcript
+                    text: response.data.transcript,
+                    maxedOut: options.maxedOut || false,
                 });
                 robot.typeString(response.data.transcript);
             } else {
@@ -95,12 +120,12 @@ class MainProcessAudio {
             }
         } catch (error) {
             console.error('[MainAudio] Error processing transcription:', error.message);
-            this.mainWindow.webContents.send('transcription-result', {
+            this.sendIPC('transcription-result', {
                 success: false,
                 error: error.message
             });
         } finally {
-            this.mainWindow.webContents.send('recording-status', 'idle');
+            this.sendIPC('recording-status', 'idle');
             if (fs.existsSync(this.fileName)) {
                 fs.unlinkSync(this.fileName);
             }

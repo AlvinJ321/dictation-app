@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, screen } = require('electron');
 // const iohook = require('iohook'); // Remove iohook
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
@@ -9,6 +9,7 @@ const { MainProcessAudio } = require('./src/main/audio');
 const player = require('play-sound')(opts = {});
 
 let mainWindow; // This will hold the main window reference
+let feedbackWindow; // This will hold the feedback window reference
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
 let serverProcess; // Variable to hold the server child process
 let audioHandler;
@@ -24,15 +25,23 @@ function sendOrQueueIPC(channel, ...args) {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed() && isWindowReadyForIPC) {
     try {
       mainWindow.webContents.send(channel, ...args);
-      console.log(`[Main] IPC message sent on channel '${channel}'`);
+      console.log(`[Main] IPC message sent on channel '${channel}' to main window.`);
     } catch (error) {
-      console.error(`[Main] Error sending IPC message on channel '${channel}':`, error);
-      console.log(`[Main] Queuing message for channel '${channel}' due to error.`);
-      messageQueue.push({ channel, args });
+      console.error(`[Main] Error sending IPC message on channel '${channel}' to main window:`, error);
     }
   } else {
-    console.log(`[Main] Window not ready. Queuing message for channel '${channel}'.`);
+    console.log(`[Main] Main window not ready. Queuing message for channel '${channel}'.`);
     messageQueue.push({ channel, args });
+  }
+
+  // Also send to feedback window if it exists
+  if (feedbackWindow && !feedbackWindow.isDestroyed() && feedbackWindow.webContents && !feedbackWindow.webContents.isDestroyed()) {
+    try {
+      feedbackWindow.webContents.send(channel, ...args);
+      console.log(`[Main] IPC message sent on channel '${channel}' to feedback window.`);
+    } catch (error) {
+      console.error(`[Main] Error sending IPC message on channel '${channel}' to feedback window:`, error);
+    }
   }
 }
 
@@ -87,11 +96,45 @@ function stopServer() {
   }
 }
 
+function createFeedbackWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  feedbackWindow = new BrowserWindow({
+    width: 300, // Slightly wider for the message
+    height: 40,  // Slimmer
+    x: Math.round((width - 300) / 2),
+    y: height - 60, // Positioned closer to the bottom
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    show: false, // Start hidden
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  const isDev = process.argv.includes('--dev');
+  if (isDev) {
+    feedbackWindow.loadURL('http://localhost:5173/feedback.html');
+  } else {
+    feedbackWindow.loadFile(path.join(__dirname, 'dist', 'feedback.html'));
+  }
+
+  feedbackWindow.on('closed', () => {
+    feedbackWindow = null;
+  });
+}
+
 function createWindow () {
   mainWindow = new BrowserWindow({
     title: 'Voco',
     width: 800,
     height: 600,
+    // show: false, // Re-enable showing the window on start
     resizable: false,
     center: true,
     webPreferences: {
@@ -135,8 +178,8 @@ function createWindow () {
     console.log('Window closed.');
   });
 
-  // Initialize the audio handler once the window is created and pass the store
-  audioHandler = new MainProcessAudio(mainWindow, store);
+  // Initialize the audio handler once the window is created and pass the IPC function
+  audioHandler = new MainProcessAudio(sendOrQueueIPC, store, player);
 }
 
 const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working value from logs
@@ -248,48 +291,43 @@ app.whenReady().then(async () => {
   keyListener = new GlobalKeyboardListener();
 
   keyListener.addListener(async (e, down) => {
-    // Correctly check for the key name and state
-    const isTargetKey = e.name === TARGET_KEY_NAME_PRIMARY || e.name === TARGET_KEY_NAME_SECONDARY || e.name === TARGET_KEY_NAME_TERTIARY;
+    const keyName = e.name;
 
-    if (isTargetKey) {
-      // --- AUTHENTICATION CHECK ---
-      // If the user is logged out, ignore the key press entirely.
-      const accessToken = store.get('accessToken');
-      if (!accessToken) {
-        console.log('[Main] Hotkey pressed but no access token found. Ignoring.');
-        rightOptionPressed = false; // Ensure state is reset
-        return;
-      }
-      // --- END AUTHENTICATION CHECK ---
-
-      if (e.state === "DOWN" && !rightOptionPressed) {
+    // We check for the specific key names on key down.
+    if (e.state === "DOWN" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
+      if (!rightOptionPressed) {
         rightOptionPressed = true;
-        console.log(`Right Option key down (Name: ${e.name})`);
         
-        // Simplified and direct permission check
+        // Permission checks
         const micAccess = systemPreferences.getMediaAccessStatus('microphone');
         const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
 
         if (micAccess !== 'granted' || !accessibilityAccess) {
           console.warn(`Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
-          // We can show a dialog here if we want, but for now, just log and block.
-          rightOptionPressed = false; // Reset state to allow trying again
+          rightOptionPressed = false; // Reset state
           return;
         }
-        
+
         console.log('Permissions OK. Starting recording.');
+        if (feedbackWindow) feedbackWindow.showInactive();
         player.play(path.join(__dirname, 'sfx/start-recording-bubble.mp3'), (err) => {
-          if (err) console.error('Error playing start-recording sound:', err);
+          if (err) console.error('Error playing start sound:', err);
         });
         audioHandler.startRecording();
-
-      } else if (e.state === "UP" && rightOptionPressed) {
+      }
+    } else if (e.state === "UP" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
+      if (rightOptionPressed && audioHandler.isRecording) {
         rightOptionPressed = false;
-        console.log(`Right Option key up (Name: ${e.name})`);
+        
+        console.log('Recording stopped by user. Processing...');
+        if (feedbackWindow) feedbackWindow.hide();
         player.play(path.join(__dirname, 'sfx/stop-recording-bubble.mp3'), (err) => {
-          if (err) console.error('Error playing stop-recording sound:', err);
+          if (err) console.error('Error playing stop sound:', err);
         });
         audioHandler.stopRecordingAndProcess();
+      } else {
+        // This handles the case where the key is released *after* the timer already stopped the recording.
+        rightOptionPressed = false;
       }
     }
   });
@@ -301,6 +339,7 @@ app.whenReady().then(async () => {
   // Start the server process
   // startServer(); // DISABLED TO PREVENT PORT CONFLICT
   createWindow();
+  createFeedbackWindow();
 
   app.on('activate', () => {
     // On macOS it's common to re-create a window in the app when the
