@@ -17,8 +17,7 @@ function handleForcedLogout() {
 async function refreshToken() {
   const tokens = await getTokens();
   if (!tokens || !tokens.refreshToken) {
-    console.log('No refresh token available, forcing logout.');
-    // No need to call handleForcedLogout here, as the caller will handle the error
+    console.log('No refresh token available.');
     return null;
   }
 
@@ -32,22 +31,21 @@ async function refreshToken() {
     });
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})); // Gracefully handle non-JSON error bodies
+      console.error('Failed to refresh token, server responded with:', response.status, errorData);
       throw new Error('Failed to refresh token');
     }
 
     const data = await response.json();
-    // Assuming the refresh token might be rotated as well
-    if (data.refreshToken) {
-        setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-    } else {
-        const currentTokens = await getTokens();
-        if(currentTokens){
-            setTokens({ accessToken: data.accessToken, refreshToken: currentTokens.refreshToken });
-        }
-    }
+    const newTokens = {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken || tokens.refreshToken, // Use new refresh token if provided (rotation)
+    };
+    await setTokens(newTokens);
+    console.log('Token refreshed successfully.');
     return data.accessToken;
   } catch (error) {
-    console.error('Could not refresh token:', error);
+    console.error('Could not refresh token due to a network or parsing error:', error);
     // If refreshing fails, the user needs to be logged out.
     handleForcedLogout();
     return null;
@@ -72,15 +70,30 @@ async function apiFetch(url: string, options: RequestInit = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
+    console.log(`Initial request to ${url} failed with ${response.status}. Attempting to refresh token.`);
     const newAccessToken = await refreshToken();
+
     if (newAccessToken) {
+      console.log(`Token refreshed. Retrying request to ${url}.`);
       headers.set('Authorization', `Bearer ${newAccessToken}`);
       // Retry the request with the new token
-      response = await fetch(`${API_BASE_URL}/api${url}`, {
-        ...options,
-        headers,
-      });
+      try {
+        response = await fetch(`${API_BASE_URL}/api${url}`, {
+          ...options,
+          headers,
+        });
+
+        if (!response.ok) {
+            console.error(`Retried request to ${url} failed with status: ${response.status}`);
+        }
+      } catch (error) {
+          console.error(`Retried request to ${url} failed with a network error:`, error);
+          // To ensure we don't return a malformed response object, we can return the original error response
+          // or construct a new error response. Returning the original is simpler.
+          return response; // Return the original 401/403 response
+      }
     } else {
+        console.log('Refresh token was not available or refresh failed. Not retrying request.');
         // If refresh failed, the refreshToken function already handled the logout.
         // We return the original failed response to prevent the calling code from processing further.
         return response;

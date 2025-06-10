@@ -48,6 +48,7 @@
     "lucide-react": "^0.513.0",
     "node-audiorecorder": "^3.0.0",
     "node-global-key-listener": "^0.3.0",
+    "play-sound": "^1.1.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sqlite3": "^5.1.7"

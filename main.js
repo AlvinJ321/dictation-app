@@ -6,6 +6,7 @@ const { fork } = require('child_process'); // Added for forking the server proce
 const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
 const { systemPreferences, dialog } = require('electron'); // Added systemPreferences and dialog
 const { MainProcessAudio } = require('./src/main/audio');
+const player = require('play-sound')(opts = {});
 
 let mainWindow; // This will hold the main window reference
 let isWindowReadyForIPC = false; // Flag to indicate if window can receive IPC
@@ -13,6 +14,7 @@ let serverProcess; // Variable to hold the server child process
 let audioHandler;
 let keyListener;
 let rightOptionPressed = false; // Moved to top-level scope
+let store; // Define store in the top-level scope
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -133,8 +135,8 @@ function createWindow () {
     console.log('Window closed.');
   });
 
-  // Initialize the audio handler once the window is created
-  audioHandler = new MainProcessAudio(mainWindow);
+  // Initialize the audio handler once the window is created and pass the store
+  audioHandler = new MainProcessAudio(mainWindow, store);
 }
 
 const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working value from logs
@@ -188,7 +190,7 @@ async function checkAndRequestPermissions() {
 app.whenReady().then(async () => {
   // --- Electron Store and IPC Handlers for Auth ---
   const { default: Store } = await import('electron-store');
-  const store = new Store();
+  store = new Store(); // Initialize the top-level store
 
   ipcMain.handle('get-tokens', () => {
     try {
@@ -230,8 +232,13 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('clear-tokens', () => {
-    store.delete('accessToken');
-    store.delete('refreshToken');
+    try {
+      store.delete('accessToken');
+      store.delete('refreshToken');
+      console.log('[Main] Tokens cleared on logout.');
+    } catch (error) {
+      console.error('Failed to clear tokens in main process:', error);
+    }
   });
 
   // Start the server process
@@ -245,6 +252,16 @@ app.whenReady().then(async () => {
     const isTargetKey = e.name === TARGET_KEY_NAME_PRIMARY || e.name === TARGET_KEY_NAME_SECONDARY || e.name === TARGET_KEY_NAME_TERTIARY;
 
     if (isTargetKey) {
+      // --- AUTHENTICATION CHECK ---
+      // If the user is logged out, ignore the key press entirely.
+      const accessToken = store.get('accessToken');
+      if (!accessToken) {
+        console.log('[Main] Hotkey pressed but no access token found. Ignoring.');
+        rightOptionPressed = false; // Ensure state is reset
+        return;
+      }
+      // --- END AUTHENTICATION CHECK ---
+
       if (e.state === "DOWN" && !rightOptionPressed) {
         rightOptionPressed = true;
         console.log(`Right Option key down (Name: ${e.name})`);
@@ -261,11 +278,17 @@ app.whenReady().then(async () => {
         }
         
         console.log('Permissions OK. Starting recording.');
+        player.play(path.join(__dirname, 'sfx/start-recording-bubble.mp3'), (err) => {
+          if (err) console.error('Error playing start-recording sound:', err);
+        });
         audioHandler.startRecording();
 
       } else if (e.state === "UP" && rightOptionPressed) {
         rightOptionPressed = false;
         console.log(`Right Option key up (Name: ${e.name})`);
+        player.play(path.join(__dirname, 'sfx/stop-recording-bubble.mp3'), (err) => {
+          if (err) console.error('Error playing stop-recording sound:', err);
+        });
         audioHandler.stopRecordingAndProcess();
       }
     }

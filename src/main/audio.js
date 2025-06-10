@@ -2,12 +2,13 @@ const AudioRecorder = require('node-audiorecorder');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 const robot = require('@hurdlegroup/robotjs');
 
 class MainProcessAudio {
-    constructor(mainWindow) {
+    constructor(mainWindow, store) {
         this.mainWindow = mainWindow;
+        this.store = store;
         this.audioRecorder = null;
         this.isRecording = false;
         this.fileName = path.join(app.getPath('temp'), 'recording.wav');
@@ -55,12 +56,28 @@ class MainProcessAudio {
         this.audioRecorder.stop();
 
         try {
+            const encryptedAccessToken = this.store.get('accessToken');
+            if (!encryptedAccessToken) {
+                console.log('[MainAudio] No access token found. Blocking transcription.');
+                this.mainWindow.webContents.send('transcription-result', {
+                    success: false,
+                    error: 'You must be logged in to transcribe.'
+                });
+                this.mainWindow.webContents.send('recording-status', 'error');
+                return;
+            }
+            
+            const accessToken = safeStorage.isEncryptionAvailable()
+                ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
+                : encryptedAccessToken;
+
             const audioBuffer = fs.readFileSync(this.fileName);
             console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
             
             const response = await axios.post('http://localhost:3001/api/speech', audioBuffer, {
                 headers: {
                     'Content-Type': 'audio/wav',
+                    'Authorization': `Bearer ${accessToken}`,
                     'X-Audio-Format': 'wav',
                     'X-Audio-SampleRate': '16000'
                 }
@@ -84,7 +101,6 @@ class MainProcessAudio {
             });
         } finally {
             this.mainWindow.webContents.send('recording-status', 'idle');
-            // Clean up the temp file
             if (fs.existsSync(this.fileName)) {
                 fs.unlinkSync(this.fileName);
             }

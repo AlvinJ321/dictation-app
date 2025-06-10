@@ -134,31 +134,31 @@ export default function SignInPage() {
           {phoneError && <p className="text-red-500 text-sm text-left px-1">{phoneError}</p>}
 
           {/* Verification Code Input */}
-          <div className="border border-gray-300 rounded-lg">
+          <div className="relative">
             <input
               type="text"
               value={verificationCode}
               onChange={(e) => setVerificationCode(e.target.value)}
               placeholder="输入验证码"
-              className="w-full p-2.5 outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
-              disabled={!isVerificationSent}
+              className="w-full p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
             />
           </div>
           {verificationCodeError && <p className="text-red-500 text-sm text-left px-1">{verificationCodeError}</p>}
           
-          {error && <p className="text-red-500 text-sm text-center px-1">{error}</p>}
+          {/* Global Error */}
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          {/* Submit Button */}
+          {/* Login Button */}
           <button
             type="submit"
-            disabled={!isVerificationSent || isLoading}
-            className="w-full mt-8 py-2.5 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:bg-blue-200"
+            disabled={isLoading}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-semibold text-lg transition-colors disabled:bg-blue-300"
           >
             {isLoading ? '登录中...' : '登录'}
           </button>
         </form>
-        
       </div>
     </div>
   );
-} 
+}

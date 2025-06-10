@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, LogOut, Mic, Loader, Check, Edit } from 'lucide-react';
+import { User, LogOut, Mic, Loader, Check, Edit, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-type Status = 'idle' | 'recording' | 'processing' | 'success';
+type Status = 'idle' | 'recording' | 'processing' | 'success' | 'error';
 
 interface AppPageProps {
   onNavigateToWip: () => void;
@@ -19,8 +19,8 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
     const handleStatusChange = (newStatus: Status) => {
       console.log(`[AppPage] Received status: ${newStatus}`);
       setStatus(newStatus);
-      // If success, revert to idle after a short delay
-      if (newStatus === 'success') {
+      // If success or error, revert to idle after a short delay
+      if (newStatus === 'success' || newStatus === 'error') {
         setTimeout(() => setStatus('idle'), 1500);
       }
     };
@@ -62,6 +62,8 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
         return <Loader className="w-10 h-10 text-blue-500 animate-spin" />;
       case 'success':
         return <Check className="w-10 h-10 text-green-500" />;
+      case 'error':
+        return <XCircle className="w-10 h-10 text-red-500" />;
       case 'idle':
       default:
         return <p className="text-gray-500">按住 <span className="font-semibold text-blue-500">Right Option</span> 键开始听写</p>;
