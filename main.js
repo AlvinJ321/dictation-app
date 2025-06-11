@@ -189,42 +189,57 @@ const TARGET_KEY_NAME_TERTIARY = 'ALTGR'; // Another possibility
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
 
 async function checkAndRequestPermissions() {
-  // Microphone Access
-  let micAccess = systemPreferences.getMediaAccessStatus('microphone');
-  console.log('[Main] Initial Microphone Access Status:', micAccess);
+  if (process.platform === 'darwin') {
+    // macOS-specific permission logic
+    // Microphone Access
+    let micAccess = systemPreferences.getMediaAccessStatus('microphone');
+    console.log('[Main] Initial Microphone Access Status:', micAccess);
 
-  if (micAccess === 'not-determined') {
-    const granted = await systemPreferences.askForMediaAccess('microphone');
-    micAccess = granted ? 'granted' : 'denied';
-    console.log('[Main] Microphone Access after asking:', micAccess);
+    if (micAccess === 'not-determined') {
+      const granted = await systemPreferences.askForMediaAccess('microphone');
+      micAccess = granted ? 'granted' : 'denied';
+      console.log('[Main] Microphone Access after asking:', micAccess);
+    }
+
+    // Accessibility Access
+    let accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false); // Check without prompting
+    console.log('[Main] Initial Accessibility Access Status:', accessibilityAccess);
+
+    if (!accessibilityAccess) {
+      console.log('[Main] Accessibility not granted, attempting to trigger system prompt...');
+      systemPreferences.isTrustedAccessibilityClient(true); // This prompts the user.
+      accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
+      console.log('[Main] Accessibility Access after system prompt attempt:', accessibilityAccess);
+    }
+    
+    console.log('[Main] Final Accessibility Access Status:', accessibilityAccess);
+    return { mic: micAccess === 'granted', accessibility: accessibilityAccess };
+
+  } else if (process.platform === 'win32') {
+    // Windows-specific permission logic
+    let micAccess = systemPreferences.getMediaAccessStatus('microphone');
+    console.log('[Main] Windows Microphone Access Status:', micAccess);
+
+    if (micAccess === 'denied') {
+      dialog.showMessageBox({
+        type: 'warning',
+        title: 'Microphone Access Denied',
+        message: 'Microphone access is required for dictation.',
+        detail: 'Please go to Windows Settings > Privacy & security > Microphone and ensure this application has permission to access the microphone.',
+        buttons: ['OK']
+      });
+    }
+
+    // On Windows, robotjs does not require explicit accessibility permissions.
+    // The microphone prompt will appear when the app first tries to record.
+    // We return true for accessibility to allow the app to proceed.
+    // The function will return true for mic unless it's explicitly denied.
+    return { mic: micAccess !== 'denied', accessibility: true };
+  } else {
+    // For other platforms like Linux, assume permissions are granted.
+    console.log(`[Main] Running on unsupported platform for permission check: ${process.platform}. Assuming permissions are granted.`);
+    return { mic: true, accessibility: true };
   }
-
-  // Removed the custom dialog. If micAccess is not 'granted' here,
-  // it means the user denied it at the system prompt or it was already denied.
-  // The application will proceed, and dictation will be blocked if mic is not available (logged by key listener).
-
-  // Accessibility Access
-  // On macOS, isTrustedAccessibilityClient(true) will prompt the user if access is not granted.
-  // However, it's often better to guide the user to settings if it's not already granted.
-  let accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false); // Check without prompting
-  console.log('[Main] Initial Accessibility Access Status:', accessibilityAccess);
-
-  if (!accessibilityAccess) {
-    // Trigger the system prompt for accessibility access.
-    // This will open System Settings if the user needs to grant permission.
-    console.log('[Main] Accessibility not granted, attempting to trigger system prompt...');
-    systemPreferences.isTrustedAccessibilityClient(true); // This prompts the user.
-    // Re-check after the system prompt. The user might have granted it.
-    accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
-    console.log('[Main] Accessibility Access after system prompt attempt:', accessibilityAccess);
-
-    // If still not granted after the system prompt, we could show a non-intrusive message
-    // or rely on the fact that dictation will be blocked (logged in key listener).
-    // For now, we'll rely on the key listener to block and log if still not granted.
-  }
-  
-  console.log('[Main] Final Accessibility Access Status:', accessibilityAccess);
-  return { mic: micAccess === 'granted', accessibility: accessibilityAccess };
 }
 
 // This method will be called when Electron has finished
