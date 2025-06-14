@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, LogOut, Mic, Loader, Check, Edit, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import appIcon from '../../resource/app-icon.jpg';
 
 type Status = 'idle' | 'recording' | 'processing' | 'success' | 'error' | 'warning';
 
@@ -95,8 +96,8 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       {/* Header */}
       <header className="flex justify-between items-center w-full">
         {/* Logo */}
-        <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
-          <span className="text-white font-bold text-sm">Logo</span>
+        <div className="w-12 h-12 flex items-center justify-center">
+          <img src={appIcon} alt="App Icon" className="w-12 h-12 rounded-full" />
         </div>
         {/* User Menu */}
         <div className="relative">
