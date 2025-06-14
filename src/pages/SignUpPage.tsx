@@ -80,8 +80,8 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="bg-white flex items-center justify-center h-screen font-sans">
-      <div className="bg-white w-full max-w-sm p-6 relative">
+    <div className="flex items-center justify-center h-screen font-sans" style={{ backgroundColor: '#F5F6FA' }}>
+      <div className="w-full max-w-sm p-6 relative" style={{ backgroundColor: '#F5F6FA' }}>
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -94,13 +94,13 @@ export default function SignUpPage() {
         <form onSubmit={handleAuthSubmit} className="space-y-6">
           {/* Phone Input Group */}
           <div className="flex items-center space-x-2">
-            <span className="bg-gray-100 text-gray-600 px-3 py-2.5 rounded-lg font-semibold">+86</span>
+            <span className="px-3 py-2.5 rounded-lg font-semibold border border-gray-300 bg-white text-gray-600">+86</span>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="手机号"
-              className="flex-1 p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
+              className="flex-1 p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-w-0 bg-white"
               disabled={isLoading || countdown > 0}
             />
             <button
@@ -120,7 +120,7 @@ export default function SignUpPage() {
               value={verificationCode}
               onChange={(e) => setVerificationCode(e.target.value)}
               placeholder="输入验证码"
-              className="w-full p-2.5 outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 outline-none bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               disabled={!isVerificationSent}
             />
           </div>

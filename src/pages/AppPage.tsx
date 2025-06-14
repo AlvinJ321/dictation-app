@@ -92,7 +92,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   }
 
   return (
-    <div className="bg-white flex flex-col h-screen font-sans p-8">
+    <div className="flex flex-col h-screen font-sans p-8" style={{ backgroundColor: '#F5F6FA' }}>
       {/* Header */}
       <header className="flex justify-between items-center w-full">
         {/* Logo */}
