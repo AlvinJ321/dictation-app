@@ -132,16 +132,16 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
 
       {/* Main Content */}
       <main className="flex flex-col items-center justify-center flex-grow text-center">
-        <div className="flex flex-col items-center gap-4">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            <span role="img" aria-label="wave">👋</span> 欢迎使用 Voco (Alpha)
-          </h1>
-          <div className="h-10 mt-4 flex flex-col items-center justify-center"> {/* Container to prevent layout shift */}
-            {renderStatusIcon()}
-            {renderStatusMessage()}
+        <div className="flex flex-col items-center w-full max-w-md mx-auto">
+          <div className="flex flex-col items-center w-full" style={{ gap: '0.8rem' }}>
+            <h1 className="text-2xl font-semibold text-gray-800 tracking-wide">
+              <span role="img" aria-label="crown">👑</span> 欢迎使用Flow说（内测版）
+            </h1>
+            <p className="text-xl text-gray-800 tracking-wide">选择任何输入框，按住 <span className="font-semibold text-blue-500">Right Option</span> 键开始转写</p>
+            <p className="text-xl tracking-wide" style={{ color: '#f59e1a' }}>（每次可录最长60秒的语音）</p>
           </div>
           <button 
-            className="mt-8 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors text-lg"
+            className="mt-10 px-8 py-3 border border-gray-300 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-xl font-semibold text-gray-600"
             onClick={onNavigateToWip}
             >
             探索使用场景

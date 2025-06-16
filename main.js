@@ -133,7 +133,7 @@ function createFeedbackWindow() {
 function createWindow () {
   mainWindow = new BrowserWindow({
     title: 'Voco',
-    width: 800,
+    width: 700,
     height: 600,
     // show: false, // Re-enable showing the window on start
     resizable: false,
