@@ -4,13 +4,33 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes fade-in-out {
-  0% { opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { opacity: 0; }
+@keyframes wave {
+    0%, 100% {
+        transform: scaleY(1);
+    }
+    50% {
+        transform: scaleY(0.5);
+    }
 }
 
+.animate-wave {
+    animation: wave 1s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
 .animate-fade-in-out {
-  animation: fade-in-out 6s ease-in-out forwards;
+    animation: fadeInOut 6s ease-in-out;
 }

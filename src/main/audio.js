@@ -79,6 +79,13 @@ class MainProcessAudio {
         this.sendIPC('recording-status', 'processing');
         this.audioRecorder.stop();
 
+        // Play stop sound effect if recording was stopped due to reaching the 60-second limit
+        if (options.maxedOut) {
+            this.player.play(path.join(__dirname, '../../sfx/stop-recording-bubble.mp3'), (err) => {
+                if (err) console.error('Error playing stop sound:', err);
+            });
+        }
+
         try {
             const encryptedAccessToken = this.store.get('accessToken');
             if (!encryptedAccessToken) {

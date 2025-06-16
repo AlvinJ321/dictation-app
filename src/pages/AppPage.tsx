@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, LogOut, Mic, Loader, Check, Edit, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import appIcon from '../../resource/app-icon.jpg';
+import appIcon from '../../resource/Voco-app-icon.png';
 
 type Status = 'idle' | 'recording' | 'processing' | 'success' | 'error' | 'warning';
 
@@ -92,7 +92,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen font-sans p-8" style={{ backgroundColor: '#F5F6FA' }}>
+    <div className="flex flex-col h-screen font-sans p-8" style={{ backgroundColor: '#FAFAF7' }}>
       {/* Header */}
       <header className="flex justify-between items-center w-full">
         {/* Logo */}

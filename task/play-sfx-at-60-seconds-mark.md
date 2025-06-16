@@ -1,0 +1,1 @@
+if user keeps pressing the hotkey at 60 seconds mark, play the stop-recording-bubble.mp3 as sound effect.

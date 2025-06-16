@@ -99,8 +99,8 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen font-sans" style={{ backgroundColor: '#F5F6FA' }}>
-      <div className="w-full max-w-sm p-6 relative" style={{ backgroundColor: '#F5F6FA' }}>
+    <div className="flex items-center justify-center h-screen font-sans" style={{ backgroundColor: '#FAFAF7' }}>
+      <div className="w-full max-w-sm p-6 relative" style={{ backgroundColor: '#FAFAF7' }}>
 
         {/* Header */}
         <div className="text-center mb-12">
