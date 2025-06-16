@@ -5,6 +5,23 @@ import './index.css';
 
 type Status = 'idle' | 'recording' | 'processing' | 'success' | 'error' | 'warning';
 
+const AudioWave: React.FC = () => {
+    return (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-1">
+            {[...Array(5)].map((_, i) => (
+                <div
+                    key={i}
+                    className="w-1 h-4 bg-blue-500 rounded-full animate-wave"
+                    style={{
+                        animationDelay: `${i * 0.1}s`,
+                        animationDuration: '1s'
+                    }}
+                />
+            ))}
+        </div>
+    );
+};
+
 const FeedbackComponent: React.FC = () => {
     const [status, setStatus] = useState<Status>('idle');
     const [showMaxedOutMessage, setShowMaxedOutMessage] = useState(false);
@@ -58,7 +75,12 @@ const FeedbackComponent: React.FC = () => {
         return null;
     };
 
-    return renderContent();
+    return (
+        <>
+            {renderContent()}
+            {status === 'recording' && <AudioWave />}
+        </>
+    );
 };
 
 const rootElement = document.getElementById('root');
