@@ -56,7 +56,25 @@
   "build": {
     "appId": "com.example.voco",
     "mac": {
+      "icon": "resource/Voco-app-icon.icns",
       "target": "dmg"
-    }
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "resource/**/*",
+      "src/main/audio.js"
+    ],
+    "extraResources": [
+      {
+        "from": "resource/sox",
+        "to": "resource/sox"
+      },
+      {
+        "from": "sfx",
+        "to": "sfx"
+      }
+    ]
   }
 }

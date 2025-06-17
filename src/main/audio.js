@@ -5,6 +5,16 @@ const path = require('path');
 const { app, safeStorage } = require('electron');
 const robot = require('@hurdlegroup/robotjs');
 
+const isProd = process.env.NODE_ENV === 'production' || (app && app.isPackaged);
+let soxPath;
+if (isProd) {
+  // Use the resources path for binaries
+  soxPath = path.join(process.resourcesPath, 'resource', 'sox');
+} else {
+  soxPath = 'sox';
+}
+console.log('[MainAudio] Using sox binary at:', soxPath);
+
 class MainProcessAudio {
     constructor(sendIPC, store, player) {
         this.sendIPC = sendIPC;
@@ -17,7 +27,7 @@ class MainProcessAudio {
         this.warningTimer = null;
 
         const options = {
-            program: 'sox',
+            program: soxPath,
             device: null,
             bits: 16,
             channels: 1,
@@ -103,6 +113,7 @@ class MainProcessAudio {
     }
 
     startRecording() {
+        console.log('[DEBUG] MainProcessAudio.startRecording called');
         if (this.isRecording) {
             console.log('[MainAudio] Already recording.');
             return;
@@ -123,7 +134,10 @@ class MainProcessAudio {
         this.warningTimer = setTimeout(() => {
             console.log('[MainAudio] 50 seconds reached, warning user.');
             this.sendIPC('recording-status', 'warning');
-            this.player.play(path.join(__dirname, '../../sfx/50seconds.mp3'), (err) => {
+            const warningSoundPath = isProd
+              ? path.join(process.resourcesPath, 'sfx', '50seconds.mp3')
+              : path.join(__dirname, '../../sfx/50seconds.mp3');
+            this.player.play(warningSoundPath, (err) => {
                 if (err) console.error('Error playing 50-second warning sound:', err);
             });
         }, 50000);
@@ -136,6 +150,7 @@ class MainProcessAudio {
     }
 
     async stopRecordingAndProcess(options = {}) {
+        console.log('[DEBUG] MainProcessAudio.stopRecordingAndProcess called');
         if (!this.isRecording) {
             console.log('[MainAudio] Not recording.');
             return;

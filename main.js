@@ -7,6 +7,7 @@ const robot = require('@hurdlegroup/robotjs'); // Added RobotJS
 const { systemPreferences, dialog } = require('electron'); // Added systemPreferences and dialog
 const { MainProcessAudio } = require('./src/main/audio');
 const player = require('play-sound')(opts = {});
+const isProd = process.env.NODE_ENV === 'production' || (app && app.isPackaged);
 
 let mainWindow; // This will hold the main window reference
 let feedbackWindow; // This will hold the feedback window reference
@@ -309,25 +310,31 @@ app.whenReady().then(async () => {
 
   keyListener.addListener(async (e, down) => {
     const keyName = e.name;
+    console.log(`[DEBUG] Key event: ${e.state} - ${keyName}`);
 
-    // We check for the specific key names on key down.
     if (e.state === "DOWN" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
       if (!rightOptionPressed) {
         rightOptionPressed = true;
-        
+        console.log("[DEBUG] Right Option key DOWN detected, permissions check next.");
+
         // Permission checks
         const micAccess = systemPreferences.getMediaAccessStatus('microphone');
         const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
 
+        console.log(`[DEBUG] micAccess: ${micAccess}, accessibilityAccess: ${accessibilityAccess}`);
+
         if (micAccess !== 'granted' || !accessibilityAccess) {
-          console.warn(`Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
+          console.warn(`[DEBUG] Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
           rightOptionPressed = false; // Reset state
           return;
         }
 
-        console.log('Permissions OK. Starting recording.');
+        console.log('[DEBUG] Permissions OK. Starting recording.');
         if (feedbackWindow) feedbackWindow.showInactive();
-        player.play(path.join(__dirname, 'sfx/start-recording-bubble.mp3'), (err) => {
+        const startSoundPath = isProd 
+          ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
+          : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
+        player.play(startSoundPath, (err) => {
           if (err) console.error('Error playing start sound:', err);
         });
         audioHandler.startRecording();
@@ -335,15 +342,16 @@ app.whenReady().then(async () => {
     } else if (e.state === "UP" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
       if (rightOptionPressed && audioHandler.isRecording) {
         rightOptionPressed = false;
-        
-        console.log('Recording stopped by user. Processing...');
+        console.log('[DEBUG] Right Option key UP detected, stopping recording.');
         if (feedbackWindow) feedbackWindow.hide();
-        player.play(path.join(__dirname, 'sfx/stop-recording-bubble.mp3'), (err) => {
+        const stopSoundPath = isProd
+          ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
+          : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');
+        player.play(stopSoundPath, (err) => {
           if (err) console.error('Error playing stop sound:', err);
         });
         audioHandler.stopRecordingAndProcess();
       } else {
-        // This handles the case where the key is released *after* the timer already stopped the recording.
         rightOptionPressed = false;
       }
     }
