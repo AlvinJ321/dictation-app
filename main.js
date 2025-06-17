@@ -370,6 +370,11 @@ app.whenReady().then(async () => {
     console.log('[Main] Received app-ready signal from renderer.');
     processMessageQueue();
   });
+
+  // Set the Dock icon on macOS
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, 'resource', 'Voco-app-icon.png'));
+  }
 });
 
 app.on('window-all-closed', () => {

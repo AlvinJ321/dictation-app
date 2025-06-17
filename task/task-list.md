@@ -70,3 +70,8 @@
     - [ ] After transcription, insert the 60 seconds transcribed text into the input field. Provide a subtle feedback to the user (design to be discussed) that includes:
         - A message stating the recording stopped at the 60-second limit.
         - A reminder that they can press the hotkey again to continue dictating.
+- [ ] **12. Update Electron App Icon for Production**
+    - [ ] Convert the new PNG icon to .icns (macOS) and .ico (Windows)
+    - [ ] Place the .icns and .ico files in the resource directory
+    - [ ] Update the Electron builder/packager config to use the new icons
+    - [ ] Rebuild the app and verify the icon in the Dock (macOS) and taskbar (Windows)
