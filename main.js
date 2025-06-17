@@ -17,6 +17,7 @@ let audioHandler;
 let keyListener;
 let rightOptionPressed = false; // Moved to top-level scope
 let store; // Define store in the top-level scope
+let lastPermissions = { mic: false, accessibility: false };
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -191,7 +192,7 @@ const TARGET_KEY_NAME_TERTIARY = 'ALTGR'; // Another possibility
 
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
 
-async function checkAndRequestPermissions() {
+async function checkAndRequestPermissions(promptForAccessibility = true) {
   if (process.platform === 'darwin') {
     // macOS-specific permission logic
     // Microphone Access
@@ -208,7 +209,7 @@ async function checkAndRequestPermissions() {
     let accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false); // Check without prompting
     console.log('[Main] Initial Accessibility Access Status:', accessibilityAccess);
 
-    if (!accessibilityAccess) {
+    if (!accessibilityAccess && promptForAccessibility) {
       console.log('[Main] Accessibility not granted, attempting to trigger system prompt...');
       systemPreferences.isTrustedAccessibilityClient(true); // This prompts the user.
       accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
@@ -360,17 +361,30 @@ app.whenReady().then(async () => {
   console.log('Global key listener added. Press Right Option key to test.');
   console.log('NOTE: You may need to grant Accessibility permissions to the application (or your terminal if running in dev mode).');
 
-  await checkAndRequestPermissions();
+  // Save initial permissions state (prompt for accessibility)
+  lastPermissions = await checkAndRequestPermissions(true);
   // Start the server process
   // startServer(); // DISABLED TO PREVENT PORT CONFLICT
   createWindow();
   createFeedbackWindow();
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    }
+    // --- Auto-restart on permissions granted (macOS only) ---
+    if (process.platform === 'darwin') {
+      const perms = await checkAndRequestPermissions(false);
+      if ((!lastPermissions.mic || !lastPermissions.accessibility) && perms.mic && perms.accessibility) {
+        console.log('[Main] Permissions granted after activate. Restarting app...');
+        setTimeout(() => {
+          app.relaunch();
+          app.exit(0);
+        }, 500);
+      }
+      lastPermissions = perms;
     }
   });
 
@@ -382,6 +396,23 @@ app.whenReady().then(async () => {
   // Set the Dock icon on macOS
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'resource', 'Voco-app-icon.png'));
+  }
+
+  // --- Auto-restart on permissions granted (macOS only) ---
+  if (process.platform === 'darwin') {
+    app.on('browser-window-focus', async () => {
+      // Only check, do not prompt again
+      const perms = await checkAndRequestPermissions(false);
+      // Only restart if previously missing permissions and now both are granted
+      if ((!lastPermissions.mic || !lastPermissions.accessibility) && perms.mic && perms.accessibility) {
+        console.log('[Main] Permissions granted after focus. Restarting app...');
+        setTimeout(() => {
+          app.relaunch();
+          app.exit(0);
+        }, 500); // short delay for UX
+      }
+      lastPermissions = perms;
+    });
   }
 });
 
