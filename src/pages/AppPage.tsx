@@ -37,14 +37,26 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       }
     };
 
+    const handleAuthFailed = (data: { reason: string }) => {
+      console.log('[AppPage] Authentication failed:', data.reason);
+      if (data.reason === 'token_expired') {
+        setLastError('Your session has expired. Please log in again.');
+        handleStatusChange('error');
+        // Optionally, you could automatically redirect to login here
+        // logout();
+      }
+    };
+
     // Listen for status updates from the main process
     window.electron.onRecordingStatus(handleStatusChange);
     window.electron.onTranscriptionResult(handleTranscriptionResult);
+    window.electron.onAuthFailed(handleAuthFailed);
 
     return () => {
       // Cleanup listeners
       window.electron.removeRecordingStatusListener(handleStatusChange);
       window.electron.removeTranscriptionResultListener(handleTranscriptionResult);
+      window.electron.removeAuthFailedListener(handleAuthFailed);
     };
   }, []);
 
@@ -135,7 +147,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
         <div className="flex flex-col items-center w-full max-w-md mx-auto">
           <div className="flex flex-col items-center w-full" style={{ gap: '0.8rem' }}>
             <h1 className="text-2xl font-semibold text-gray-800 tracking-wide">
-              <span role="img" aria-label="crown">👑</span> 欢迎使用Flow说（内测版）
+              <span role="img" aria-label="crown">👑</span> 欢迎使用Voco（内测版）
             </h1>
             <p className="text-xl text-gray-800 tracking-wide">选择任何输入框，按住 <span className="font-semibold text-blue-500">Right Option</span> 键开始转写</p>
             <p className="text-xl tracking-wide" style={{ color: '#f59e1a' }}>（每次可录最长60秒的语音）</p>

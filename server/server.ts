@@ -23,6 +23,22 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(cors());
 
+// Authentication middleware
+const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        console.log('[Server] No authorization token provided');
+        return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // For now, we'll just validate that a token exists
+    // In a production environment, you would verify the token against your auth service
+    console.log('[Server] Authorization token provided, proceeding with request');
+    next();
+};
+
 // Store token in memory (in production, use a proper cache/database)
 let accessToken: string | null = null;
 let tokenExpiry: Date | null = null;
@@ -113,7 +129,7 @@ interface AliyunASRResponse {
     // Example from docs: {"status":20000000,"message":"SUCCESS","result":"北京 明天 天气 怎么样","task_id":"925AFAD74467459AA999C755B717****"}
 }
 
-app.post('/api/speech', async (req: express.Request, res: express.Response) => {
+app.post('/api/speech', authenticateToken, async (req: express.Request, res: express.Response) => {
     console.log('[Server] Received audio data, size:', req.body.length);
     console.log('[Server] Content-Type:', req.headers['content-type']);
 

@@ -7,6 +7,8 @@ declare global {
       removeRecordingStatusListener: (callback: (status: 'recording' | 'processing' | 'success' | 'idle' | 'warning' | 'error') => void) => void;
       onTranscriptionResult: (callback: (result: { success: boolean; text?: string; error?: string; maxedOut?: boolean }) => void) => void;
       removeTranscriptionResultListener: (callback: (result: { success: boolean; text?: string; error?: string; maxedOut?: boolean }) => void) => void;
+      onAuthFailed: (callback: (data: { reason: string }) => void) => void;
+      removeAuthFailedListener: (callback: (data: { reason: string }) => void) => void;
       sendTextInsertion: (text: string) => void;
       store: {
         getTokens: () => Promise<{ accessToken: string; refreshToken: string } | null>;

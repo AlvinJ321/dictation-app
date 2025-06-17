@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electron', {
   removeRecordingStatusListener: (callback) => ipcRenderer.removeListener('recording-status', callback),
   onTranscriptionResult: (callback) => ipcRenderer.on('transcription-result', (event, result) => callback(result)),
   removeTranscriptionResultListener: (callback) => ipcRenderer.removeListener('transcription-result', callback),
+  onAuthFailed: (callback) => ipcRenderer.on('auth-failed', (event, data) => callback(data)),
+  removeAuthFailedListener: (callback) => ipcRenderer.removeListener('auth-failed', callback),
   
   // TEXT INSERTION
   sendTextInsertion: (text) => ipcRenderer.send('insert-text', text),
