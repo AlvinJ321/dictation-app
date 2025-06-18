@@ -1,0 +1,10 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with rounded corners -->
+  <rect width="1024" height="1024" rx="180" fill="#FAFAF7"/>
+  <!-- Blue bars, scaled down and centered for proper padding -->
+  <rect x="312" y="372" width="56" height="280" rx="28" fill="#3B82F6"/>
+  <rect x="400" y="392" width="56" height="240" rx="28" fill="#3B82F6"/>
+  <rect x="488" y="412" width="56" height="200" rx="28" fill="#3B82F6"/>
+  <rect x="664" y="417" width="56" height="190" rx="28" fill="#3B82F6"/>
+  <rect x="576" y="422" width="56" height="180" rx="28" fill="#3B82F6"/>
+</svg>

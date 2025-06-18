@@ -18,6 +18,8 @@ let keyListener;
 let rightOptionPressed = false; // Moved to top-level scope
 let store; // Define store in the top-level scope
 let lastPermissions = { mic: false, accessibility: false };
+let permissionMonitorInterval = null;
+let restartDialogShown = false; // Flag to prevent showing dialog multiple times
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -246,6 +248,116 @@ async function checkAndRequestPermissions(promptForAccessibility = true) {
   }
 }
 
+// Function to check permissions without prompting (for monitoring)
+async function checkPermissionsOnly() {
+  if (process.platform === 'darwin') {
+    // macOS-specific permission check without prompting
+    const micAccess = systemPreferences.getMediaAccessStatus('microphone');
+    const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
+    
+    console.log('[Main] Permission check - Mic:', micAccess, 'Accessibility:', accessibilityAccess);
+    
+    return { 
+      mic: micAccess === 'granted', 
+      accessibility: accessibilityAccess 
+    };
+  } else if (process.platform === 'win32') {
+    // Windows-specific permission check
+    const micAccess = systemPreferences.getMediaAccessStatus('microphone');
+    return { 
+      mic: micAccess !== 'denied', 
+      accessibility: true 
+    };
+  } else {
+    return { mic: true, accessibility: true };
+  }
+}
+
+// Update showRestartDialog to always show and focus the main window
+async function showRestartDialog() {
+  // Ensure mainWindow exists and is visible
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+
+  // Wait a moment to ensure window is visible
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  const { dialog } = require('electron');
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    buttons: ['稍后', '立即重启'],
+    defaultId: 1,
+    cancelId: 0,
+    title: '辅助功能权限已授予',
+    message: '辅助功能权限已授予，请重启应用以使新权限生效。',
+    detail: '点击"立即重启"将立即重启应用，或点击"稍后"稍后手动重启。',
+    noLink: true,
+    normalizeAccessKeys: true,
+  });
+
+  if (result.response === 1) {
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 500);
+  }
+}
+
+// Function to monitor permission changes and show restart dialog when needed
+async function monitorPermissionChanges() {
+  if (process.platform !== 'darwin') {
+    return; // Only monitor on macOS where accessibility permissions matter
+  }
+  
+  const currentPermissions = await checkPermissionsOnly();
+  
+  console.log('[Main] Permission monitoring - Previous:', lastPermissions, 'Current:', currentPermissions);
+  
+  // Check if accessibility permission changed from denied to granted
+  const accessibilityWasDenied = !lastPermissions.accessibility;
+  const accessibilityNowGranted = currentPermissions.accessibility;
+  
+  if (accessibilityWasDenied && accessibilityNowGranted && !restartDialogShown) {
+    console.log('[Main] Accessibility permission changed from denied to granted. Showing restart dialog...');
+    restartDialogShown = true; // Set flag to prevent duplicate dialogs
+    await showRestartDialog();
+  } else if (accessibilityNowGranted) {
+    console.log('[Main] Accessibility permission is granted, no change detected or dialog already shown');
+  } else {
+    console.log('[Main] Accessibility permission is not granted');
+    // Reset flag when accessibility permission is revoked
+    restartDialogShown = false;
+  }
+  
+  // Update last permissions state
+  lastPermissions = currentPermissions;
+}
+
+// Function to start permission monitoring timer
+function startPermissionMonitor() {
+  if (permissionMonitorInterval) return;
+  permissionMonitorInterval = setInterval(async () => {
+    await monitorPermissionChanges();
+    // If both permissions are granted, stop the timer
+    if (lastPermissions.mic && lastPermissions.accessibility) {
+      stopPermissionMonitor();
+    }
+  }, 2000);
+}
+
+// Function to stop permission monitoring timer
+function stopPermissionMonitor() {
+  if (permissionMonitorInterval) {
+    clearInterval(permissionMonitorInterval);
+    permissionMonitorInterval = null;
+    console.log('[Main] Permission monitoring stopped.');
+  }
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -303,9 +415,19 @@ app.whenReady().then(async () => {
     }
   });
 
-  // Start the server process
-  // startServer(); // DISABLED TO PREVENT PORT CONFLICT
-  
+  // Permission-related IPC handlers
+  ipcMain.handle('check-permissions', async () => {
+    return await checkPermissionsOnly();
+  });
+
+  ipcMain.handle('restart-app', () => {
+    console.log('[Main] Restart requested by renderer. Restarting app...');
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 500);
+  });
+
   // --- Global Key Listener Setup ---
   keyListener = new GlobalKeyboardListener();
 
@@ -363,32 +485,17 @@ app.whenReady().then(async () => {
 
   // Save initial permissions state (prompt for accessibility)
   lastPermissions = await checkAndRequestPermissions(true);
+  
+  // Reset dialog flag on app start
+  restartDialogShown = false;
+  
+  // Start permission monitoring
+  startPermissionMonitor();
+
   // Start the server process
   // startServer(); // DISABLED TO PREVENT PORT CONFLICT
   createWindow();
   createFeedbackWindow();
-
-  app.on('activate', async () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createWindow();
-    } else {
-      mainWindow.show();
-    }
-    // --- Auto-restart on permissions granted (macOS only) ---
-    if (process.platform === 'darwin') {
-      const perms = await checkAndRequestPermissions(false);
-      if ((!lastPermissions.mic || !lastPermissions.accessibility) && perms.mic && perms.accessibility) {
-        console.log('[Main] Permissions granted after activate. Restarting app...');
-        setTimeout(() => {
-          app.relaunch();
-          app.exit(0);
-        }, 500);
-      }
-      lastPermissions = perms;
-    }
-  });
 
   ipcMain.on('app-ready', () => {
     console.log('[Main] Received app-ready signal from renderer.');
@@ -400,20 +507,15 @@ app.whenReady().then(async () => {
     app.dock.setIcon(path.join(__dirname, 'resource', 'Voco-app-icon.png'));
   }
 
-  // --- Auto-restart on permissions granted (macOS only) ---
+  // Start permission monitoring
   if (process.platform === 'darwin') {
+    // Start the permission monitoring timer
+    startPermissionMonitor();
+    
+    // Also check permissions when window gains focus (becomes visible)
     app.on('browser-window-focus', async () => {
-      // Only check, do not prompt again
-      const perms = await checkAndRequestPermissions(false);
-      // Only restart if previously missing permissions and now both are granted
-      if ((!lastPermissions.mic || !lastPermissions.accessibility) && perms.mic && perms.accessibility) {
-        console.log('[Main] Permissions granted after focus. Restarting app...');
-        setTimeout(() => {
-          app.relaunch();
-          app.exit(0);
-        }, 500); // short delay for UX
-      }
-      lastPermissions = perms;
+      console.log('[Main] Window gained focus, checking permissions...');
+      await monitorPermissionChanges();
     });
   }
 });
@@ -435,6 +537,21 @@ app.on('will-quit', () => {
   keyListener.kill();
   // stopServer(); // DISABLED TO PREVENT PORT CONFLICT
   console.log('App quitting, key listener stopped.');
+});
+
+// Also monitor when app is activated (dock icon click)
+app.on('activate', async () => {
+  // On macOS it's common to re-create a window in the app when the
+  // dock icon is clicked and there are no other windows open.
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  } else {
+    mainWindow.show();
+  }
+  
+  // Always check for permission changes when app is activated
+  // This handles the case where permissions were granted while window was hidden
+  await monitorPermissionChanges();
 });
 
 // All IPC listeners are now handled within their respective modules or are no longer needed. 

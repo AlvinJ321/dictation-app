@@ -27,6 +27,16 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.send('clear-tokens');
     },
   },
+
+  // PERMISSION MANAGEMENT
+  permissions: {
+    async check() {
+      return await ipcRenderer.invoke('check-permissions');
+    },
+    async restart() {
+      return await ipcRenderer.invoke('restart-app');
+    },
+  },
 });
 
 // All of the Node.js APIs are available in the preload process.

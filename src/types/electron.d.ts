@@ -15,6 +15,10 @@ declare global {
         setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
         clearTokens: () => void;
       };
+      permissions: {
+        check: () => Promise<{ mic: boolean; accessibility: boolean }>;
+        restart: () => Promise<void>;
+      };
     };
   }
 } 
