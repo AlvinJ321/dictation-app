@@ -14,6 +14,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
 
@@ -104,7 +105,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen font-sans p-8" style={{ backgroundColor: '#FAFAF7' }}>
+    <div className="flex flex-col h-screen font-sans p-8 relative" style={{ backgroundColor: '#FAFAF7' }}>
       {/* Header */}
       <header className="flex justify-between items-center w-full">
         {/* Logo */}
@@ -160,6 +161,49 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
           </button>
         </div>
       </main>
+      {/* Question Mark Button */}
+      <button
+        className="fixed bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-transparent border-0 shadow-none hover:bg-gray-100 z-20 cursor-pointer"
+        style={{ fontSize: 0, opacity: 0.7 }}
+        aria-label="帮助"
+        onClick={() => setIsGuideOpen(true)}
+      >
+        {/* Only a blue circle with question mark */}
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="10" r="9" stroke="#2563eb" strokeWidth="1.5" fill="none" />
+          <text x="10" y="15" textAnchor="middle" fontSize="12" fill="#2563eb" fontFamily="Arial, sans-serif">?</text>
+        </svg>
+      </button>
+      {/* Guide Modal */}
+      {isGuideOpen && (
+        <div className="absolute left-0 top-0 w-full h-full flex items-center justify-center z-30 pointer-events-none">
+          <div className="relative bg-gray-100 rounded-2xl shadow-lg p-6 max-w-xl w-full flex flex-col items-center animate-fade-in pointer-events-auto" style={{ minHeight: '140px' }}>
+            <button
+              className="absolute top-2 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold"
+              aria-label="关闭"
+              onClick={() => setIsGuideOpen(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+            <div className="whitespace-pre-line text-blue-900 text-base font-mono leading-relaxed text-left w-full max-w-md mx-auto" style={{ wordBreak: 'break-word' }}>
+              {[
+                <>如果按住 right option 无法转写，<span className="font-bold">请重新启动应用</span>。</>,
+                '重启后还是无法转写，请按照以下步骤检查权限设置：',
+                <><span className="font-bold">开启麦克风权限</span>：</>,
+                '打开「系统设置」>「隐私与安全性」>「麦克风」',
+                '确保已勾选 Voco 应用',
+                <><span className="font-bold">开启辅助功能权限</span>：</>,
+                '打开「系统设置」>「隐私与安全性」>「辅助功能」',
+                '确保已勾选 Voco 应用',
+                <>更改权限后，<span className="font-bold">重新启动应用</span></>
+              ].map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
