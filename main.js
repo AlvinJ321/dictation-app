@@ -116,7 +116,7 @@ function createFeedbackWindow() {
     movable: false,
     focusable: false,
     show: false, // Start hidden
-    icon: path.join(__dirname, 'resource', 'Voco-app-icon.png'),
+    icon: path.join(__dirname, 'resource', 'Voco.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -142,7 +142,7 @@ function createWindow () {
     // show: false, // Re-enable showing the window on start
     resizable: false,
     center: true,
-    icon: path.join(__dirname, 'resource', 'Voco-app-icon.png'),
+    icon: path.join(__dirname, 'resource', 'Voco.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // nodeIntegration: true, // May not be needed for node-global-key-listener in main
@@ -504,7 +504,7 @@ app.whenReady().then(async () => {
 
   // Set the Dock icon on macOS
   if (process.platform === 'darwin') {
-    app.dock.setIcon(path.join(__dirname, 'resource', 'Voco-app-icon.png'));
+    app.dock.setIcon(path.join(__dirname, 'resource', 'Voco.icns'));
   }
 
   // Start permission monitoring

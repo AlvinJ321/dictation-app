@@ -56,7 +56,7 @@
   "build": {
     "appId": "com.example.voco",
     "mac": {
-      "icon": "resource/Voco-app-icon.icns",
+      "icon": "resource/Voco.icns",
       "target": "dmg"
     },
     "files": [
