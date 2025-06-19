@@ -20,6 +20,7 @@ let store; // Define store in the top-level scope
 let lastPermissions = { mic: false, accessibility: false };
 let permissionMonitorInterval = null;
 let restartDialogShown = false; // Flag to prevent showing dialog multiple times
+let permissionsChecked = false; // Flag to track if permissions have been checked
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -135,18 +136,20 @@ function createFeedbackWindow() {
 }
 
 function createWindow () {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    mainWindow = null;
+    isWindowReadyForIPC = false;
+  }
   mainWindow = new BrowserWindow({
     title: 'Voco',
     width: 700,
     height: 600,
-    // show: false, // Re-enable showing the window on start
     resizable: false,
     center: true,
     icon: path.join(__dirname, 'resource', 'Voco.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      // nodeIntegration: true, // May not be needed for node-global-key-listener in main
-      // contextIsolation: false // May not be needed
     }
   });
 
@@ -182,7 +185,14 @@ function createWindow () {
     mainWindow = null;
     isWindowReadyForIPC = false;
     console.log('Window closed.');
+    // Also close the feedback window if it exists
+    if (feedbackWindow) {
+      feedbackWindow.close();
+    }
   });
+
+  // Create the feedback window whenever the main window is created
+  createFeedbackWindow();
 
   // Initialize the audio handler once the window is created and pass the IPC function
   audioHandler = new MainProcessAudio(sendOrQueueIPC, store, player);
@@ -440,6 +450,13 @@ app.whenReady().then(async () => {
         rightOptionPressed = true;
         console.log("[DEBUG] Right Option key DOWN detected, permissions check next.");
 
+        // Check permissions when user first tries to use the app
+        if (!permissionsChecked) {
+          console.log('[Main] First time using app, checking permissions...');
+          lastPermissions = await checkAndRequestPermissions(true);
+          permissionsChecked = true;
+        }
+
         // Permission checks
         const micAccess = systemPreferences.getMediaAccessStatus('microphone');
         const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
@@ -483,19 +500,18 @@ app.whenReady().then(async () => {
   console.log('Global key listener added. Press Right Option key to test.');
   console.log('NOTE: You may need to grant Accessibility permissions to the application (or your terminal if running in dev mode).');
 
-  // Save initial permissions state (prompt for accessibility)
-  lastPermissions = await checkAndRequestPermissions(true);
-  
+  // On app launch, only check permissions without prompting
+  lastPermissions = await checkPermissionsOnly();
+  console.log('[Main] Initial permissions state (no prompting):', lastPermissions);
+
   // Reset dialog flag on app start
   restartDialogShown = false;
-  
+
   // Start permission monitoring
   startPermissionMonitor();
 
-  // Start the server process
-  // startServer(); // DISABLED TO PREVENT PORT CONFLICT
+  // Create windows immediately
   createWindow();
-  createFeedbackWindow();
 
   ipcMain.on('app-ready', () => {
     console.log('[Main] Received app-ready signal from renderer.');
@@ -507,16 +523,25 @@ app.whenReady().then(async () => {
     app.dock.setIcon(path.join(__dirname, 'resource', 'Voco.icns'));
   }
 
-  // Start permission monitoring
-  if (process.platform === 'darwin') {
-    // Start the permission monitoring timer
-    startPermissionMonitor();
-    
-    // Also check permissions when window gains focus (becomes visible)
-    app.on('browser-window-focus', async () => {
-      console.log('[Main] Window gained focus, checking permissions...');
+  // Only prompt for permissions on first focus/activation or first key press
+  // browser-window-focus
+  app.on('browser-window-focus', async () => {
+    if (!permissionsChecked) {
+      console.log('[Main] First window focus, prompting for permissions...');
+      lastPermissions = await checkAndRequestPermissions(true);
+      permissionsChecked = true;
+    } else {
       await monitorPermissionChanges();
-    });
+    }
+  });
+});
+
+// This should be at the top level, not inside whenReady
+app.on('activate', () => {
+  // On macOS it's common to re-create a window in the app when the
+  // dock icon is clicked and there are no other windows open.
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
 });
 
@@ -537,21 +562,6 @@ app.on('will-quit', () => {
   keyListener.kill();
   // stopServer(); // DISABLED TO PREVENT PORT CONFLICT
   console.log('App quitting, key listener stopped.');
-});
-
-// Also monitor when app is activated (dock icon click)
-app.on('activate', async () => {
-  // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    createWindow();
-  } else {
-    mainWindow.show();
-  }
-  
-  // Always check for permission changes when app is activated
-  // This handles the case where permissions were granted while window was hidden
-  await monitorPermissionChanges();
 });
 
 // All IPC listeners are now handled within their respective modules or are no longer needed. 
