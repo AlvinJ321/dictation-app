@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, LogOut, Mic, Loader, Check, Edit, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, LogOut, Mic, Loader, Check, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import appIcon from '../../resource/Voco-app-icon.png';
 
@@ -15,6 +15,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
 
@@ -61,12 +62,24 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
     };
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
   const handleLogout = () => {
     logout();
-  };
-
-  const handleProfileUpdate = () => {
-    onNavigateToWip();
   };
 
   const renderStatusIcon = () => {
@@ -113,7 +126,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
           <img src={appIcon} alt="App Icon" className="w-12 h-12 rounded-full" />
         </div>
         {/* User Menu */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 cursor-pointer">
               <span className="text-gray-700">{userName}</span>
               {user?.avatarUrl ? (
@@ -124,13 +137,6 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
             </button>
             {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                    <button
-                        onClick={handleProfileUpdate}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                        <Edit className="w-4 h-4 mr-2" />
-                        修改资料
-                    </button>
                     <button
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
