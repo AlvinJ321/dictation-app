@@ -157,6 +157,7 @@ app.post('/api/speech', authenticateToken, async (req: express.Request, res: exp
             enable_punctuation_prediction: 'true',
             enable_inverse_text_normalization: 'true',
             disfluency: 'true',
+            version: '4.0',
             // Add other parameters as needed, e.g., enable_voice_detection, max_start_silence, etc.
         });
 
