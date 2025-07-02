@@ -17,10 +17,11 @@ if (isProd) {
 console.log('[MainAudio] Using sox binary at:', soxPath);
 
 class MainProcessAudio {
-    constructor(sendIPC, store, player) {
+    constructor(sendIPC, store, player, getRefinementState) {
         this.sendIPC = sendIPC;
         this.store = store;
         this.player = player;
+        this.getRefinementState = getRefinementState || (() => false);
         this.audioRecorder = null;
         this.isRecording = false;
         this.fileName = path.join(os.tmpdir(), 'voco_recording.wav');
@@ -85,9 +86,13 @@ class MainProcessAudio {
         return null;
     }
 
-    async makeSpeechRequest(audioBuffer, accessToken) {
+    async makeSpeechRequest(audioBuffer, accessToken, isRefinementOn) {
         try {
-            const response = await axios.post('http://localhost:3001/api/speech', audioBuffer, {
+            const url = new URL('http://localhost:3001/api/speech');
+            if (isRefinementOn) {
+                url.searchParams.append('refine', 'true');
+            }
+            const response = await axios.post(url.toString(), audioBuffer, {
                 headers: {
                     'Content-Type': 'audio/wav',
                     'Authorization': `Bearer ${accessToken}`,
@@ -104,7 +109,7 @@ class MainProcessAudio {
                 
                 if (newAccessToken) {
                     console.log('[MainAudio] Token refreshed, retrying request...');
-                    return await this.makeSpeechRequest(audioBuffer, newAccessToken);
+                    return await this.makeSpeechRequest(audioBuffer, newAccessToken, isRefinementOn);
                 } else {
                     throw new Error('Authentication failed. Please log in again.');
                 }
@@ -150,7 +155,8 @@ class MainProcessAudio {
                 const audioBuffer = fs.readFileSync(this.fileName);
                 console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
                 
-                const response = await this.makeSpeechRequest(audioBuffer, accessToken);
+                const isRefinementOn = this.getRefinementState();
+                const response = await this.makeSpeechRequest(audioBuffer, accessToken, isRefinementOn);
 
                 if (response.data && response.data.transcript) {
                     console.log('[MainAudio] Transcription success:', response.data.transcript);

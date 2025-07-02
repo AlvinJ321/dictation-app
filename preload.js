@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('electron', {
   // TEXT INSERTION
   sendTextInsertion: (text) => ipcRenderer.send('insert-text', text),
 
+  // AI REFINEMENT
+  sendRefinementState: (state) => ipcRenderer.send('set-refinement-state', state),
+
   // TOKEN STORE
   store: {
     async getTokens() {

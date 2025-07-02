@@ -15,6 +15,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isRefinementOn, setIsRefinementOn] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
@@ -61,6 +62,10 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       window.electron.removeAuthFailedListener(handleAuthFailed);
     };
   }, []);
+
+  useEffect(() => {
+    window.electron.sendRefinementState(isRefinementOn);
+  }, [isRefinementOn]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -167,6 +172,22 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
           </button>
         </div>
       </main>
+      {/* AI Refinement Toggle */}
+      <div className="fixed bottom-5 left-8 flex items-center">
+        <span className="text-sm font-medium text-gray-700 mr-2">AI润色</span>
+        <button
+          onClick={() => setIsRefinementOn(!isRefinementOn)}
+          className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none cursor-pointer ${
+            isRefinementOn ? 'bg-blue-500' : 'bg-gray-300'
+          }`}
+        >
+          <span
+            className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${
+              isRefinementOn ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
       {/* Question Mark Button */}
       <button
         className="fixed bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-transparent border-0 shadow-none hover:bg-gray-100 z-20 cursor-pointer"

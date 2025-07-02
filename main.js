@@ -17,6 +17,7 @@ let audioHandler;
 let keyListener;
 let rightOptionPressed = false; // Moved to top-level scope
 let store; // Define store in the top-level scope
+let isRefinementOn = true; // Default to ON
 let lastPermissions = { mic: false, accessibility: false };
 let permissionMonitorInterval = null;
 let restartDialogShown = false; // Flag to prevent showing dialog multiple times
@@ -195,7 +196,7 @@ function createWindow () {
   createFeedbackWindow();
 
   // Initialize the audio handler once the window is created and pass the IPC function
-  audioHandler = new MainProcessAudio(sendOrQueueIPC, store, player);
+  audioHandler = new MainProcessAudio(sendOrQueueIPC, store, player, () => isRefinementOn);
 }
 
 const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working value from logs
@@ -425,6 +426,11 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.on('set-refinement-state', (event, state) => {
+    isRefinementOn = state;
+    console.log(`[Main] AI Refinement state set to: ${isRefinementOn}`);
+  });
+
   // Permission-related IPC handlers
   ipcMain.handle('check-permissions', async () => {
     return await checkPermissionsOnly();
@@ -563,4 +569,4 @@ app.on('will-quit', () => {
   console.log('App quitting, key listener stopped.');
 });
 
-// All IPC listeners are now handled within their respective modules or are no longer needed. 
+// All IPC listeners are now handled within their respective modules or are no longer needed.
