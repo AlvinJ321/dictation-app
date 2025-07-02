@@ -17,11 +17,13 @@ if (isProd) {
 console.log('[MainAudio] Using sox binary at:', soxPath);
 
 class MainProcessAudio {
-    constructor(sendIPC, store, player, getRefinementState) {
+    constructor(sendIPC, store, player, getRefinementState, createFeedbackWindow, destroyFeedbackWindow) {
         this.sendIPC = sendIPC;
         this.store = store;
         this.player = player;
         this.getRefinementState = getRefinementState || (() => false);
+        this.createFeedbackWindow = createFeedbackWindow;
+        this.destroyFeedbackWindow = destroyFeedbackWindow;
         this.audioRecorder = null;
         this.isRecording = false;
         this.fileName = path.join(os.tmpdir(), 'voco_recording.wav');
@@ -127,6 +129,11 @@ class MainProcessAudio {
 
         console.log('[MainAudio] Starting recording...');
         this.isRecording = true;
+        
+        // Create feedback window and send initial status
+        this.createFeedbackWindow('recording');
+        
+        // This IPC is for the main window, the feedback window gets it from its creator
         this.sendIPC('recording-status', 'recording');
 
         const fileStream = fs.createWriteStream(this.fileName, { encoding: 'binary' });
@@ -158,44 +165,22 @@ class MainProcessAudio {
                 const isRefinementOn = this.getRefinementState();
                 const response = await this.makeSpeechRequest(audioBuffer, accessToken, isRefinementOn);
 
-                if (response.data && response.data.transcript) {
-                    console.log('[MainAudio] Transcription success:', response.data.transcript);
-                    this.sendIPC('transcription-result', {
-                        success: true,
-                        text: response.data.transcript,
-                        maxedOut: this.maxedOut,
-                    });
+                if (response.data.transcript) {
                     robot.typeString(response.data.transcript);
-                } else {
-                    throw new Error(response.data.error || 'No transcript in response');
+                    this.sendIPC('transcription-result', { success: true, maxedOut: this.maxedOut });
+                    this.sendIPC('recording-status', 'success');
+                } else if (response.data.error) {
+                    console.error('[MainAudio] ASR service returned an error:', response.data.error);
+                    this.sendIPC('transcription-result', { success: false, error: response.data.error });
+                    this.sendIPC('recording-status', 'error');
                 }
             } catch (error) {
-                console.error('[MainAudio] Error processing transcription:', error.message);
-                
-                let errorMessage = error.message;
-                
-                if (error.response) {
-                    const status = error.response.status;
-                    if (status === 403) {
-                        errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
-                    } else if (status === 401) {
-                        errorMessage = 'Authentication required. Please log in again.';
-                    } else if (status === 429) {
-                        errorMessage = 'Too many requests. Please wait a moment before trying again.';
-                    } else if (status >= 500) {
-                        errorMessage = 'Server error. Please try again later.';
-                    }
-                } else if (error.message === 'Authentication failed. Please log in again.') {
-                    errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
-                    this.sendIPC('auth-failed', { reason: 'token_expired' });
-                }
-                
-                this.sendIPC('transcription-result', {
-                    success: false,
-                    error: errorMessage
-                });
+                console.error('[MainAudio] Error during transcription processing:', error.message);
+                this.sendIPC('transcription-result', { success: false, error: error.message });
+                this.sendIPC('recording-status', 'error');
             } finally {
                 this.sendIPC('recording-status', 'idle');
+                this.destroyFeedbackWindow(); // Destroy the window when processing is done
                 if (fs.existsSync(this.fileName)) {
                     fs.unlinkSync(this.fileName);
                 }

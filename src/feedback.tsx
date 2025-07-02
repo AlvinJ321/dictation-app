@@ -45,6 +45,10 @@ const FeedbackComponent: React.FC = () => {
         window.electron.onRecordingStatus(handleStatusChange);
         window.electron.onTranscriptionResult(handleTranscriptionResult);
 
+        // Signal that the component is ready to receive messages
+        // @ts-ignore
+        window.electron.sendFeedbackReady();
+
         return () => {
             window.electron.removeRecordingStatusListener(handleStatusChange);
             window.electron.removeTranscriptionResultListener(handleTranscriptionResult);
@@ -52,7 +56,7 @@ const FeedbackComponent: React.FC = () => {
     }, []);
 
     return (
-        <>
+        <div key={status}>
             {showMaxedOutMessage && (
                 <div className="w-full h-full flex justify-center items-center animate-fade-in-out">
                     <div className="inline-flex items-center p-2 bg-gray-900 bg-opacity-75 rounded-lg text-white font-sans backdrop-blur-sm">
@@ -72,7 +76,7 @@ const FeedbackComponent: React.FC = () => {
 
             {status === 'recording' && <AudioWave />}
             {status === 'processing' && <TranscriptionStatus />}
-        </>
+        </div>
     );
 };
 

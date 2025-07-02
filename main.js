@@ -102,22 +102,26 @@ function stopServer() {
   }
 }
 
-function createFeedbackWindow() {
+function createFeedbackWindow(initialStatus) {
+  if (feedbackWindow) {
+    return;
+  }
+
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
   feedbackWindow = new BrowserWindow({
-    width: 300, // Slightly wider for the message
-    height: 40,  // Slimmer
+    width: 300,
+    height: 40,
     x: Math.round((width - 300) / 2),
-    y: height - 60, // Positioned closer to the bottom
+    y: height - 60,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
     movable: false,
     focusable: false,
-    show: false, // Start hidden
+    show: false,
     icon: path.join(__dirname, 'resource', 'Voco.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -125,15 +129,32 @@ function createFeedbackWindow() {
   });
 
   const isDev = process.argv.includes('--dev');
-  if (isDev) {
-    feedbackWindow.loadURL('http://localhost:5173/feedback.html');
-  } else {
-    feedbackWindow.loadFile(path.join(__dirname, 'dist', 'feedback.html'));
-  }
+  const feedbackUrl = isDev
+    ? 'http://localhost:5173/feedback.html'
+    : `file://${path.join(__dirname, 'dist', 'feedback.html')}`;
+
+  feedbackWindow.loadURL(feedbackUrl);
+
+  const onReady = () => {
+    console.log(`[Main] Feedback window is ready. Sending initial status: ${initialStatus}`);
+    if (feedbackWindow && !feedbackWindow.isDestroyed()) {
+      feedbackWindow.webContents.send('recording-status', initialStatus);
+      feedbackWindow.showInactive();
+    }
+  };
+
+  ipcMain.once('feedback-window-ready', onReady);
 
   feedbackWindow.on('closed', () => {
+    ipcMain.removeListener('feedback-window-ready', onReady);
     feedbackWindow = null;
   });
+}
+
+function destroyFeedbackWindow() {
+  if (feedbackWindow) {
+    feedbackWindow.close();
+  }
 }
 
 function createWindow () {
@@ -192,11 +213,18 @@ function createWindow () {
     }
   });
 
-  // Create the feedback window whenever the main window is created
-  createFeedbackWindow();
+  // We no longer create the feedback window here.
+  // It will be created on demand by the audio handler.
 
   // Initialize the audio handler once the window is created and pass the IPC function
-  audioHandler = new MainProcessAudio(sendOrQueueIPC, store, player, () => isRefinementOn);
+  audioHandler = new MainProcessAudio(
+    sendOrQueueIPC, 
+    store, 
+    player, 
+    () => isRefinementOn,
+    createFeedbackWindow, // Pass the create function
+    destroyFeedbackWindow // Pass the destroy function
+  );
 }
 
 const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working value from logs
@@ -520,7 +548,12 @@ app.whenReady().then(async () => {
 
   ipcMain.on('app-ready', () => {
     console.log('[Main] Received app-ready signal from renderer.');
-    processMessageQueue();
+    isWindowReadyForIPC = true;
+    processMessageQueue(); // Process any queued messages
+  });
+
+  ipcMain.on('login-success', (event, { accessToken, refreshToken }) => {
+    // ... existing code ...
   });
 
   // Set the Dock icon on macOS

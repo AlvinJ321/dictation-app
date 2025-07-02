@@ -20,6 +20,19 @@ declare global {
         check: () => Promise<{ mic: boolean; accessibility: boolean }>;
         restart: () => Promise<void>;
       };
+      onMaxedOut: (callback: () => void) => void;
+      removeMaxedOutListener: (callback: () => void) => void;
+      sendFeedbackReady: () => void;
+      ipcRenderer: any;
     };
   }
+}
+
+export interface IElectronAPI {
+  store: {
+    getTokens: () => Promise<{ accessToken?: string; refreshToken?: string }>;
+    setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
+    clearTokens: () => void;
+  };
+  sendFeedbackReady: () => void;
 } 

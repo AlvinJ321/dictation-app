@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electron', {
   removeTranscriptionResultListener: (callback) => ipcRenderer.removeListener('transcription-result', callback),
   onAuthFailed: (callback) => ipcRenderer.on('auth-failed', (event, data) => callback(data)),
   removeAuthFailedListener: (callback) => ipcRenderer.removeListener('auth-failed', callback),
+  sendFeedbackReady: () => ipcRenderer.send('feedback-window-ready'),
   
   // TEXT INSERTION
   sendTextInsertion: (text) => ipcRenderer.send('insert-text', text),
