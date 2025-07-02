@@ -483,7 +483,6 @@ app.whenReady().then(async () => {
       if (rightOptionPressed && audioHandler.isRecording) {
         rightOptionPressed = false;
         console.log('[DEBUG] Right Option key UP detected, stopping recording.');
-        if (feedbackWindow) feedbackWindow.hide();
         const stopSoundPath = isProd
           ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
           : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');

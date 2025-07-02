@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, safeStorage } = require('electron');
 const robot = require('@hurdlegroup/robotjs');
+const os = require('os');
 
 const isProd = process.env.NODE_ENV === 'production' || (app && app.isPackaged);
 let soxPath;
@@ -22,12 +23,13 @@ class MainProcessAudio {
         this.player = player;
         this.audioRecorder = null;
         this.isRecording = false;
-        this.fileName = path.join(app.getPath('temp'), 'recording.wav');
+        this.fileName = path.join(os.tmpdir(), 'voco_recording.wav');
         this.recordingTimer = null;
         this.warningTimer = null;
+        this.maxedOut = false;
 
-        const options = {
-            program: soxPath,
+        this.audioRecorder = new AudioRecorder({
+            program: isProd ? path.join(process.resourcesPath, 'sox') : 'sox',
             device: null,
             bits: 16,
             channels: 1,
@@ -35,8 +37,7 @@ class MainProcessAudio {
             type: 'wav',
             silence: 0,
             keepSilence: true
-        };
-        this.audioRecorder = new AudioRecorder(options, console);
+        }, console);
     }
 
     async refreshToken() {
@@ -126,8 +127,74 @@ class MainProcessAudio {
         const fileStream = fs.createWriteStream(this.fileName, { encoding: 'binary' });
         this.audioRecorder.start().stream().pipe(fileStream);
 
-        fileStream.on('finish', () => {
-            console.log('[MainAudio] Finished writing to file.');
+        fileStream.on('finish', async () => {
+            console.log('[MainAudio] Finished writing to file, starting processing.');
+            try {
+                this.sendIPC('recording-status', 'processing');
+
+                const encryptedAccessToken = this.store.get('accessToken');
+                if (!encryptedAccessToken) {
+                    console.log('[MainAudio] No access token found. Blocking transcription.');
+                    this.sendIPC('transcription-result', {
+                        success: false,
+                        error: 'You must be logged in to transcribe.'
+                    });
+                    this.sendIPC('recording-status', 'error');
+                    return;
+                }
+                
+                const accessToken = safeStorage.isEncryptionAvailable()
+                    ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
+                    : encryptedAccessToken;
+
+                const audioBuffer = fs.readFileSync(this.fileName);
+                console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
+                
+                const response = await this.makeSpeechRequest(audioBuffer, accessToken);
+
+                if (response.data && response.data.transcript) {
+                    console.log('[MainAudio] Transcription success:', response.data.transcript);
+                    this.sendIPC('transcription-result', {
+                        success: true,
+                        text: response.data.transcript,
+                        maxedOut: this.maxedOut,
+                    });
+                    robot.typeString(response.data.transcript);
+                } else {
+                    throw new Error(response.data.error || 'No transcript in response');
+                }
+            } catch (error) {
+                console.error('[MainAudio] Error processing transcription:', error.message);
+                
+                let errorMessage = error.message;
+                
+                if (error.response) {
+                    const status = error.response.status;
+                    if (status === 403) {
+                        errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
+                    } else if (status === 401) {
+                        errorMessage = 'Authentication required. Please log in again.';
+                    } else if (status === 429) {
+                        errorMessage = 'Too many requests. Please wait a moment before trying again.';
+                    } else if (status >= 500) {
+                        errorMessage = 'Server error. Please try again later.';
+                    }
+                } else if (error.message === 'Authentication failed. Please log in again.') {
+                    errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
+                    this.sendIPC('auth-failed', { reason: 'token_expired' });
+                }
+                
+                this.sendIPC('transcription-result', {
+                    success: false,
+                    error: errorMessage
+                });
+            } finally {
+                this.sendIPC('recording-status', 'idle');
+                if (fs.existsSync(this.fileName)) {
+                    fs.unlinkSync(this.fileName);
+                }
+                this.maxedOut = false;
+            }
         });
 
         // Set a timeout to warn the user at 50 seconds
@@ -156,7 +223,6 @@ class MainProcessAudio {
             return;
         }
 
-        // Clear timers when stopping manually or automatically
         clearTimeout(this.warningTimer);
         clearTimeout(this.recordingTimer);
         this.warningTimer = null;
@@ -164,82 +230,18 @@ class MainProcessAudio {
 
         console.log('[MainAudio] Stopping recording...');
         this.isRecording = false;
-        this.sendIPC('recording-status', 'processing');
+        this.maxedOut = options.maxedOut || false;
         this.audioRecorder.stop();
 
-        // Play stop sound effect if recording was stopped due to reaching the 60-second limit
         if (options.maxedOut) {
-            this.player.play(path.join(__dirname, '../../sfx/stop-recording-bubble.mp3'), (err) => {
+            const stopSoundPath = isProd
+              ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
+              : path.join(__dirname, '../../sfx/stop-recording-bubble.mp3');
+            this.player.play(stopSoundPath, (err) => {
                 if (err) console.error('Error playing stop sound:', err);
             });
-        }
-
-        try {
-            const encryptedAccessToken = this.store.get('accessToken');
-            if (!encryptedAccessToken) {
-                console.log('[MainAudio] No access token found. Blocking transcription.');
-                this.sendIPC('transcription-result', {
-                    success: false,
-                    error: 'You must be logged in to transcribe.'
-                });
-                this.sendIPC('recording-status', 'error');
-                return;
-            }
-            
-            const accessToken = safeStorage.isEncryptionAvailable()
-                ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
-                : encryptedAccessToken;
-
-            const audioBuffer = fs.readFileSync(this.fileName);
-            console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
-            
-            const response = await this.makeSpeechRequest(audioBuffer, accessToken);
-
-            if (response.data && response.data.transcript) {
-                console.log('[MainAudio] Transcription success:', response.data.transcript);
-                this.sendIPC('transcription-result', {
-                    success: true,
-                    text: response.data.transcript,
-                    maxedOut: options.maxedOut || false,
-                });
-                robot.typeString(response.data.transcript);
-            } else {
-                throw new Error(response.data.error || 'No transcript in response');
-            }
-        } catch (error) {
-            console.error('[MainAudio] Error processing transcription:', error.message);
-            
-            let errorMessage = error.message;
-            
-            // Handle specific HTTP status codes
-            if (error.response) {
-                const status = error.response.status;
-                if (status === 403) {
-                    errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
-                } else if (status === 401) {
-                    errorMessage = 'Authentication required. Please log in again.';
-                } else if (status === 429) {
-                    errorMessage = 'Too many requests. Please wait a moment before trying again.';
-                } else if (status >= 500) {
-                    errorMessage = 'Server error. Please try again later.';
-                }
-            } else if (error.message === 'Authentication failed. Please log in again.') {
-                errorMessage = 'Your session has expired. Please log in again to continue using voice transcription.';
-                // Notify the renderer that authentication has failed
-                this.sendIPC('auth-failed', { reason: 'token_expired' });
-            }
-            
-            this.sendIPC('transcription-result', {
-                success: false,
-                error: errorMessage
-            });
-        } finally {
-            this.sendIPC('recording-status', 'idle');
-            if (fs.existsSync(this.fileName)) {
-                fs.unlinkSync(this.fileName);
-            }
         }
     }
 }
 
-module.exports = { MainProcessAudio }; 
+module.exports = { MainProcessAudio };
