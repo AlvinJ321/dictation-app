@@ -60,16 +60,17 @@
       "target": "dmg"
     },
     "files": [
-      "dist/**/*",
+      "dist/",
       "main.js",
       "preload.js",
-      "resource/**/*",
+      "index.html",
+      "feedback.html",
       "src/main/audio.js"
     ],
     "extraResources": [
       {
         "from": "resource/sox",
-        "to": "resource/sox"
+        "to": "."
       },
       {
         "from": "sfx",
