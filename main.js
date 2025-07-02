@@ -117,6 +117,8 @@ function createFeedbackWindow(initialStatus) {
     y: height - 60,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     alwaysOnTop: true,
     resizable: false,
     movable: false,
@@ -128,7 +130,7 @@ function createFeedbackWindow(initialStatus) {
     },
   });
 
-  const isDev = process.argv.includes('--dev');
+  const isDev = !app.isPackaged;
   const feedbackUrl = isDev
     ? 'http://localhost:5173/feedback.html'
     : `file://${path.join(__dirname, 'dist', 'feedback.html')}`;
@@ -139,7 +141,11 @@ function createFeedbackWindow(initialStatus) {
     console.log(`[Main] Feedback window is ready. Sending initial status: ${initialStatus}`);
     if (feedbackWindow && !feedbackWindow.isDestroyed()) {
       feedbackWindow.webContents.send('recording-status', initialStatus);
-      feedbackWindow.showInactive();
+      setTimeout(() => {
+        if (feedbackWindow && !feedbackWindow.isDestroyed()) {
+          feedbackWindow.showInactive();
+        }
+      }, 100);
     }
   };
 

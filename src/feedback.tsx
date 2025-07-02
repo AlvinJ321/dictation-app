@@ -45,9 +45,12 @@ const FeedbackComponent: React.FC = () => {
         window.electron.onRecordingStatus(handleStatusChange);
         window.electron.onTranscriptionResult(handleTranscriptionResult);
 
-        // Signal that the component is ready to receive messages
-        // @ts-ignore
-        window.electron.sendFeedbackReady();
+        // Signal that the component is ready, but wait for the next paint cycle
+        // to ensure all styles are applied, preventing the white flash.
+        requestAnimationFrame(() => {
+            // @ts-ignore
+            window.electron.sendFeedbackReady();
+        });
 
         return () => {
             window.electron.removeRecordingStatusListener(handleStatusChange);
