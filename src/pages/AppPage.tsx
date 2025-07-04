@@ -174,7 +174,15 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       </main>
       {/* AI Refinement Toggle */}
       <div className="fixed bottom-5 left-8 flex items-center">
-        <span className="text-sm font-medium text-gray-700 mr-2">AI润色</span>
+        <div className="relative group">
+          <span className="text-sm font-medium text-gray-700 mr-2 cursor-help">AI润色</span>
+          {/* Tooltip */}
+          <div className="absolute bottom-full left-0 ml-2 mb-2 px-4 py-2 bg-gray-100 text-gray-800 text-xs rounded-lg border border-gray-300 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none min-w-max z-50">
+            保持原句风格，更加清晰易懂
+            {/* Tooltip arrow */}
+            <div className="absolute top-full left-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-100 border-t border-t-gray-300"></div>
+          </div>
+        </div>
         <button
           onClick={() => setIsRefinementOn(!isRefinementOn)}
           className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none cursor-pointer ${
