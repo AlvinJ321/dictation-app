@@ -17,13 +17,14 @@ if (isProd) {
 console.log('[MainAudio] Using sox binary at:', soxPath);
 
 class MainProcessAudio {
-    constructor(sendIPC, store, player, getRefinementState, createFeedbackWindow, destroyFeedbackWindow) {
+    constructor(sendIPC, store, player, getRefinementState, createFeedbackWindow, destroyFeedbackWindow, apiBaseUrl) {
         this.sendIPC = sendIPC;
         this.store = store;
         this.player = player;
         this.getRefinementState = getRefinementState || (() => false);
         this.createFeedbackWindow = createFeedbackWindow;
         this.destroyFeedbackWindow = destroyFeedbackWindow;
+        this.apiBaseUrl = apiBaseUrl;
         this.audioRecorder = null;
         this.isRecording = false;
         this.fileName = path.join(os.tmpdir(), 'voco_recording.wav');
@@ -55,7 +56,7 @@ class MainProcessAudio {
                 ? safeStorage.decryptString(Buffer.from(encryptedRefreshToken, 'latin1'))
                 : encryptedRefreshToken;
 
-            const response = await axios.post('http://localhost:3001/api/refresh-token', {
+            const response = await axios.post(`${this.apiBaseUrl}/api/refresh-token`, {
                 refreshToken: refreshToken
             }, {
                 headers: {
@@ -90,7 +91,7 @@ class MainProcessAudio {
 
     async makeSpeechRequest(audioBuffer, accessToken, isRefinementOn) {
         try {
-            const url = new URL('http://localhost:3001/api/speech');
+            const url = new URL(`${this.apiBaseUrl}/api/speech`);
             if (isRefinementOn) {
                 url.searchParams.append('refine', 'true');
             }
