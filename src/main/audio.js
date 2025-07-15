@@ -2,7 +2,7 @@ const AudioRecorder = require('node-audiorecorder');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { app, safeStorage } = require('electron');
+const { app } = require('electron'); // safeStorage no longer needed here
 const robot = require('@hurdlegroup/robotjs');
 const os = require('os');
 
@@ -19,7 +19,7 @@ console.log('[MainAudio] Using sox binary at:', soxPath);
 class MainProcessAudio {
     constructor(sendIPC, store, player, getRefinementState, createFeedbackWindow, destroyFeedbackWindow, apiBaseUrl) {
         this.sendIPC = sendIPC;
-        this.store = store;
+        this.store = store; // Kept for other potential uses, though not for tokens
         this.player = player;
         this.getRefinementState = getRefinementState || (() => false);
         this.createFeedbackWindow = createFeedbackWindow;
@@ -44,52 +44,7 @@ class MainProcessAudio {
         }, console);
     }
 
-    async refreshToken() {
-        try {
-            const encryptedRefreshToken = this.store.get('refreshToken');
-            if (!encryptedRefreshToken) {
-                console.log('[MainAudio] No refresh token available.');
-                return null;
-            }
-
-            const refreshToken = safeStorage.isEncryptionAvailable()
-                ? safeStorage.decryptString(Buffer.from(encryptedRefreshToken, 'latin1'))
-                : encryptedRefreshToken;
-
-            const response = await axios.post(`${this.apiBaseUrl}/api/refresh-token`, {
-                refreshToken: refreshToken
-            }, {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.data && response.data.accessToken) {
-                // Store the new tokens
-                const newAccessToken = response.data.accessToken;
-                const newRefreshToken = response.data.refreshToken || refreshToken;
-
-                if (safeStorage.isEncryptionAvailable()) {
-                    this.store.set('accessToken', safeStorage.encryptString(newAccessToken).toString('latin1'));
-                    this.store.set('refreshToken', safeStorage.encryptString(newRefreshToken).toString('latin1'));
-                } else {
-                    this.store.set('accessToken', newAccessToken);
-                    this.store.set('refreshToken', newRefreshToken);
-                }
-
-                console.log('[MainAudio] Token refreshed successfully.');
-                return newAccessToken;
-            }
-        } catch (error) {
-            console.error('[MainAudio] Failed to refresh token:', error.message);
-            // Clear tokens on refresh failure
-            this.store.delete('accessToken');
-            this.store.delete('refreshToken');
-        }
-        return null;
-    }
-
-    async makeSpeechRequest(audioBuffer, accessToken, isRefinementOn) {
+    async makeSpeechRequest(audioBuffer, cookieString, isRefinementOn) {
         try {
             const url = new URL(`${this.apiBaseUrl}/api/speech`);
             if (isRefinementOn) {
@@ -98,30 +53,27 @@ class MainProcessAudio {
             const response = await axios.post(url.toString(), audioBuffer, {
                 headers: {
                     'Content-Type': 'audio/wav',
-                    'Authorization': `Bearer ${accessToken}`,
+                    // Manually attach the session cookies.
+                    'Cookie': cookieString,
                     'X-Audio-Format': 'wav',
                     'X-Audio-SampleRate': '16000'
-                }
+                },
+                // We need to handle 401 manually since we're not using the default validation
+                validateStatus: (status) => status < 500,
             });
+    
+            if (response.status === 401 || response.status === 403) {
+                throw new Error('Authentication failed. Please log in again.');
+            }
+            
             return response;
         } catch (error) {
-            // If we get a 401 or 403, try to refresh the token and retry
-            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-                console.log('[MainAudio] Token expired, attempting to refresh...');
-                const newAccessToken = await this.refreshToken();
-                
-                if (newAccessToken) {
-                    console.log('[MainAudio] Token refreshed, retrying request...');
-                    return await this.makeSpeechRequest(audioBuffer, newAccessToken, isRefinementOn);
-                } else {
-                    throw new Error('Authentication failed. Please log in again.');
-                }
-            }
+            // The error is re-thrown to be handled by the caller.
             throw error;
         }
     }
 
-    startRecording() {
+    startRecording(session) {
         console.log('[DEBUG] MainProcessAudio.startRecording called');
         if (this.isRecording) {
             console.log('[MainAudio] Already recording.');
@@ -131,10 +83,8 @@ class MainProcessAudio {
         console.log('[MainAudio] Starting recording...');
         this.isRecording = true;
         
-        // Create feedback window and send initial status
         this.createFeedbackWindow('recording');
         
-        // This IPC is for the main window, the feedback window gets it from its creator
         this.sendIPC('recording-status', 'recording');
 
         const fileStream = fs.createWriteStream(this.fileName, { encoding: 'binary' });
@@ -145,9 +95,10 @@ class MainProcessAudio {
             try {
                 this.sendIPC('recording-status', 'processing');
 
-                const encryptedAccessToken = this.store.get('accessToken');
-                if (!encryptedAccessToken) {
-                    console.log('[MainAudio] No access token found. Blocking transcription.');
+                // Get cookies from the electron session
+                const cookies = await session.cookies.get({ url: this.apiBaseUrl });
+                if (!cookies || cookies.length === 0) {
+                    console.log('[MainAudio] No cookies found. Blocking transcription.');
                     this.sendIPC('transcription-result', {
                         success: false,
                         error: 'You must be logged in to transcribe.'
@@ -155,16 +106,14 @@ class MainProcessAudio {
                     this.sendIPC('recording-status', 'error');
                     return;
                 }
-                
-                const accessToken = safeStorage.isEncryptionAvailable()
-                    ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
-                    : encryptedAccessToken;
+
+                const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
                 const audioBuffer = fs.readFileSync(this.fileName);
                 console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
                 
                 const isRefinementOn = this.getRefinementState();
-                const response = await this.makeSpeechRequest(audioBuffer, accessToken, isRefinementOn);
+                const response = await this.makeSpeechRequest(audioBuffer, cookieString, isRefinementOn);
 
                 if (response.data.transcript) {
                     robot.typeString(response.data.transcript);
@@ -181,7 +130,7 @@ class MainProcessAudio {
                 this.sendIPC('recording-status', 'error');
             } finally {
                 this.sendIPC('recording-status', 'idle');
-                this.destroyFeedbackWindow(); // Destroy the window when processing is done
+                this.destroyFeedbackWindow();
                 if (fs.existsSync(this.fileName)) {
                     fs.unlinkSync(this.fileName);
                 }
@@ -189,7 +138,6 @@ class MainProcessAudio {
             }
         });
 
-        // Set a timeout to warn the user at 50 seconds
         this.warningTimer = setTimeout(() => {
             console.log('[MainAudio] 50 seconds reached, warning user.');
             this.sendIPC('recording-status', 'warning');
@@ -201,7 +149,6 @@ class MainProcessAudio {
             });
         }, 50000);
 
-        // Set a timeout to automatically stop recording at 60 seconds
         this.recordingTimer = setTimeout(() => {
             console.log('[MainAudio] 60 seconds reached, stopping recording.');
             this.stopRecordingAndProcess({ maxedOut: true });

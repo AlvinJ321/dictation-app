@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiFetch from '../lib/api';
-import { getTokens } from '../lib/store';
+import { clearTokens } from '../lib/store';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // This is the important part of the fix: we will now call the method exposed in preload.js
 declare global {
@@ -30,7 +32,7 @@ interface AuthContextType {
     avatarUrl: string;
     avatarKey: string;
   } | null;
-  login: (tokens: { accessToken: string; refreshToken:string }) => void;
+  login: () => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -46,22 +48,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuthStatus = async () => {
       setIsLoading(true);
       try {
-        const tokens = await getTokens();
-        if (tokens && tokens.accessToken) {
-            const response = await apiFetch('/profile');
-            if (!response.ok) {
-              console.log('Auth check response not ok, status:', response.status);
-              throw new Error('Failed to fetch user profile.');
-            }
-            const userData = await response.json();
-            setUser(userData);
-            setIsAuthenticated(true);
-        } else {
-            setIsAuthenticated(false);
-            setUser(null);
+        const response = await fetch(`${API_BASE_URL}/api/profile`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          if (response.status !== 401) {
+            console.error('Unexpected error during auth check:', response.status);
+          }
+          throw new Error('User not authenticated.');
         }
-      } catch (error) {
-        console.error('Authentication check failed:', error);
+        const userData = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
+      } catch (err: unknown) {
+        const error = err as Error;
+        if (error.message !== 'User not authenticated.') {
+            console.error('Authentication check failed:', error);
+        }
         setIsAuthenticated(false);
         setUser(null);
       } finally {
@@ -71,9 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuthStatus();
   }, []);
 
-  const login = (tokens: { accessToken: string; refreshToken: string }) => {
-    // We use the exposed store method to set tokens, ensuring it's handled in the main process
-    window.electron.store.setTokens(tokens);
+  const login = () => {
     setIsAuthenticated(true);
     const fetchUser = async () => {
       try {
@@ -90,19 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    const tokens = await getTokens();
-    if (tokens && tokens.refreshToken) {
-      try {
-        await apiFetch('/logout', {
-          method: 'POST',
-          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-        });
-      } catch (error) {
-        console.error('Logout API call failed:', error);
-      }
+    try {
+      await apiFetch('/logout', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('Logout API call failed:', error);
     }
-    // This is the critical change: call the method exposed in preload.js
-    // to clear tokens in both the main and renderer process stores.
     window.electron.store.clearTokens(); 
     setIsAuthenticated(false);
     setUser(null);

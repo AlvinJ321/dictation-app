@@ -15,88 +15,57 @@ function handleForcedLogout() {
 }
 
 async function refreshToken() {
-  const tokens = await getTokens();
-  if (!tokens || !tokens.refreshToken) {
-    console.log('No refresh token available.');
-    return null;
-  }
-
   try {
+    // With httpOnly cookies, we just need to call the endpoint.
+    // The browser will handle sending the refresh token cookie.
     const response = await fetch(`${API_BASE_URL}/api/refresh-token`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+      credentials: 'include', // IMPORTANT: Send cookies
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({})); // Gracefully handle non-JSON error bodies
-      console.error('Failed to refresh token, server responded with:', response.status, errorData);
+      console.error('Failed to refresh token, server responded with:', response.status);
       throw new Error('Failed to refresh token');
     }
-
-    const data = await response.json();
-    const newTokens = {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken || tokens.refreshToken, // Use new refresh token if provided (rotation)
-    };
-    await setTokens(newTokens);
-    console.log('Token refreshed successfully.');
-    return data.accessToken;
+    
+    // The new accessToken is set as a cookie by the server.
+    // We just need to confirm success.
+    console.log('Token refreshed successfully via cookie.');
+    return true; // Indicate success
   } catch (error) {
     console.error('Could not refresh token due to a network or parsing error:', error);
-    // If refreshing fails, the user needs to be logged out.
     handleForcedLogout();
-    return null;
+    return false; // Indicate failure
   }
 }
 
 async function apiFetch(url: string, options: RequestInit = {}) {
-  const tokens = await getTokens();
-  let accessToken = tokens ? tokens.accessToken : null;
-
   const headers = new Headers(options.headers || {});
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
   if (!headers.has('Content-Type') && options.body) {
-      headers.set('Content-Type', 'application/json');
+    headers.set('Content-Type', 'application/json');
   }
 
-  let response = await fetch(`${API_BASE_URL}/api${url}`, {
+  // With httpOnly cookies, the Authorization header is no longer needed from the client.
+  // The browser handles sending the auth cookie automatically.
+  const fetchOptions: RequestInit = {
     ...options,
     headers,
-  });
+    credentials: 'include', // IMPORTANT: This tells the browser to send cookies
+  };
 
-  if (response.status === 401 || response.status === 403) {
-    console.log(`Initial request to ${url} failed with ${response.status}. Attempting to refresh token.`);
-    const newAccessToken = await refreshToken();
+  let response = await fetch(`${API_BASE_URL}/api${url}`, fetchOptions);
 
-    if (newAccessToken) {
+  if (response.status === 401) {
+    console.log(`Initial request to ${url} failed with 401. Attempting to refresh token.`);
+    const refreshed = await refreshToken();
+
+    if (refreshed) {
       console.log(`Token refreshed. Retrying request to ${url}.`);
-      headers.set('Authorization', `Bearer ${newAccessToken}`);
-      // Retry the request with the new token
-      try {
-        response = await fetch(`${API_BASE_URL}/api${url}`, {
-          ...options,
-          headers,
-        });
-
-        if (!response.ok) {
-            console.error(`Retried request to ${url} failed with status: ${response.status}`);
-        }
-      } catch (error) {
-          console.error(`Retried request to ${url} failed with a network error:`, error);
-          // To ensure we don't return a malformed response object, we can return the original error response
-          // or construct a new error response. Returning the original is simpler.
-          return response; // Return the original 401/403 response
-      }
+      // Retry the request. The browser will automatically use the new accessToken cookie.
+      response = await fetch(`${API_BASE_URL}/api${url}`, fetchOptions);
     } else {
-        console.log('Refresh token was not available or refresh failed. Not retrying request.');
-        // If refresh failed, the refreshToken function already handled the logout.
-        // We return the original failed response to prevent the calling code from processing further.
-        return response;
+      console.log('Refresh failed. Not retrying request.');
+      // The refreshToken function already handled the logout.
     }
   }
 

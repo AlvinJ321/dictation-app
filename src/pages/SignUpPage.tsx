@@ -65,13 +65,12 @@ export default function SignUpPage() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.message || '注册失败。');
       }
 
-      login({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      login();
     } catch (err) {
       setError(err instanceof Error ? err.message : '发生了未知错误。');
     } finally {

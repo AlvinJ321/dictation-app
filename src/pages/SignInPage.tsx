@@ -90,7 +90,9 @@ export default function SignInPage() {
         return;
       }
 
-      login({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      // On success, the cookie is set by the server.
+      // We no longer get tokens in the response body.
+      login();
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误，请稍后重试。');
     } finally {
