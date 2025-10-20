@@ -25,3 +25,7 @@ dist-ssr
 .env
 
 server/.gitkeep
+
+# Context
+resource/context
+task/
