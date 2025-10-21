@@ -158,6 +158,22 @@ export default function SignInPage() {
             {isLoading ? '登录中...' : '登录'}
           </button>
         </form>
+
+        <div className="text-center mt-4">
+          <span className="text-sm text-gray-600">
+            还没有账号？
+            <a
+              onClick={() => {
+                const isDev = window.location.protocol === 'http:';
+                const signupUrl = isDev ? 'http://localhost:5174/' : 'http://47.117.8.146/';
+                window.electron.openExternal(signupUrl);
+              }}
+              className="text-blue-500 hover:underline cursor-pointer"
+            >
+              去注册
+            </a>
+          </span>
+        </div>
       </div>
     </div>
   );

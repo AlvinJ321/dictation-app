@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, screen, shell } = require('electron');
 // const iohook = require('iohook'); // Remove iohook
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
@@ -564,6 +564,12 @@ app.whenReady().then(async () => {
 
   ipcMain.on('login-success', (event, { accessToken, refreshToken }) => {
     // ... existing code ...
+  });
+
+  ipcMain.on('open-external', (event, url) => {
+    if (typeof url === 'string' && (url.startsWith('http:') || url.startsWith('https:'))) {
+      shell.openExternal(url).catch(err => console.error('Failed to open external URL:', err));
+    }
   });
 
   // Set the Dock icon on macOS

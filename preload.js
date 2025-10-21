@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electron', {
   onAuthFailed: (callback) => ipcRenderer.on('auth-failed', (event, data) => callback(data)),
   removeAuthFailedListener: (callback) => ipcRenderer.removeListener('auth-failed', callback),
   sendFeedbackReady: () => ipcRenderer.send('feedback-window-ready'),
+  openExternal: (url) => ipcRenderer.send('open-external', url),
   
   // TEXT INSERTION
   sendTextInsertion: (text) => ipcRenderer.send('insert-text', text),

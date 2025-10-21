@@ -23,6 +23,7 @@ declare global {
       onMaxedOut: (callback: () => void) => void;
       removeMaxedOutListener: (callback: () => void) => void;
       sendFeedbackReady: () => void;
+      openExternal: (url: string) => void;
       ipcRenderer: any;
     };
   }
@@ -35,4 +36,5 @@ export interface IElectronAPI {
     clearTokens: () => void;
   };
   sendFeedbackReady: () => void;
+  openExternal: (url: string) => void;
 } 
