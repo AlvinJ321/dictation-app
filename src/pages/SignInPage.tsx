@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import apiFetch from '../lib/api';
+import vocoIcon from '../../resource/Voco-app-icon.png';
 
 export default function SignInPage() {
   const { login } = useAuth();
@@ -104,9 +105,7 @@ export default function SignInPage() {
 
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="mb-4 text-4xl font-bold text-blue-600">
-            Logo
-          </div>
+          <img src={vocoIcon} alt="Voco" className="mb-4 h-16 w-auto mx-auto" />
         </div>
 
         {/* Form */}
@@ -132,7 +131,6 @@ export default function SignInPage() {
             </button>
           </div>
           {phoneError && <p className="text-red-500 text-sm text-left px-1">{phoneError}</p>}
-
           {/* Verification Code Input */}
           <div className="relative">
             <input
@@ -145,10 +143,8 @@ export default function SignInPage() {
             />
           </div>
           {verificationCodeError && <p className="text-red-500 text-sm text-left px-1">{verificationCodeError}</p>}
-          
           {/* Global Error */}
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-
           {/* Login Button */}
           <button
             type="submit"
@@ -158,7 +154,6 @@ export default function SignInPage() {
             {isLoading ? '登录中...' : '登录'}
           </button>
         </form>
-
         <div className="text-center mt-4">
           <span className="text-sm text-gray-600">
             还没有账号？
@@ -166,6 +161,7 @@ export default function SignInPage() {
               onClick={() => {
                 const isDev = window.location.protocol === 'http:';
                 const signupUrl = isDev ? 'http://localhost:5174/' : 'http://47.117.8.146/';
+                // @ts-ignore
                 window.electron.openExternal(signupUrl);
               }}
               className="text-blue-500 hover:underline cursor-pointer"

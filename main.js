@@ -170,11 +170,12 @@ function createWindow () {
     isWindowReadyForIPC = false;
   }
   mainWindow = new BrowserWindow({
-    title: 'Voco',
+    title: '登录',
     width: 700,
     height: 600,
     resizable: false,
     center: true,
+    frame: true,
     icon: path.join(__dirname, 'resource', 'Voco.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
