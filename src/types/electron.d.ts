@@ -9,6 +9,8 @@ declare global {
       removeTranscriptionResultListener: (callback: (result: { success: boolean; text?: string; error?: string; maxedOut?: boolean }) => void) => void;
       onAuthFailed: (callback: (data: { reason: string }) => void) => void;
       removeAuthFailedListener: (callback: (data: { reason: string }) => void) => void;
+      onCountdownUpdate: (callback: (time: number) => void) => void;
+      removeCountdownUpdateListener: (callback: (time: number) => void) => void;
       sendFeedbackReady: () => void;
       openExternal: (url: string) => void;
       sendTextInsertion: (text: string) => void;

@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('electron', {
   removeTranscriptionResultListener: (callback) => ipcRenderer.removeListener('transcription-result', callback),
   onAuthFailed: (callback) => ipcRenderer.on('auth-failed', (event, data) => callback(data)),
   removeAuthFailedListener: (callback) => ipcRenderer.removeListener('auth-failed', callback),
+  onCountdownUpdate: (callback) => ipcRenderer.on('countdown-update', (event, time) => callback(time)),
+  removeCountdownUpdateListener: (callback) => ipcRenderer.removeListener('countdown-update', callback),
   sendFeedbackReady: () => ipcRenderer.send('feedback-window-ready'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
   

@@ -30,6 +30,7 @@ class MainProcessAudio {
         this.fileName = path.join(os.tmpdir(), 'voco_recording.wav');
         this.recordingTimer = null;
         this.warningTimer = null;
+        this.countdownTimer = null;
         this.maxedOut = false;
 
         this.audioRecorder = new AudioRecorder({
@@ -199,6 +200,20 @@ class MainProcessAudio {
             this.player.play(warningSoundPath, (err) => {
                 if (err) console.error('Error playing 50-second warning sound:', err);
             });
+            
+            // Start countdown from 10 seconds
+            let remainingTime = 10;
+            this.sendIPC('countdown-update', remainingTime);
+            
+            this.countdownTimer = setInterval(() => {
+                remainingTime--;
+                this.sendIPC('countdown-update', remainingTime);
+                
+                if (remainingTime <= 0) {
+                    clearInterval(this.countdownTimer);
+                    this.countdownTimer = null;
+                }
+            }, 1000);
         }, 50000);
 
         // Set a timeout to automatically stop recording at 60 seconds
@@ -217,8 +232,10 @@ class MainProcessAudio {
 
         clearTimeout(this.warningTimer);
         clearTimeout(this.recordingTimer);
+        clearInterval(this.countdownTimer);
         this.warningTimer = null;
         this.recordingTimer = null;
+        this.countdownTimer = null;
 
         console.log('[MainAudio] Stopping recording...');
         this.isRecording = false;
