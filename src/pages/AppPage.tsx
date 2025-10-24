@@ -64,6 +64,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   }, []);
 
   useEffect(() => {
+    // @ts-ignore
     window.electron.sendRefinementState(isRefinementOn);
   }, [isRefinementOn]);
 
@@ -132,7 +133,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
         </div>
         {/* User Menu */}
         <div className="relative" ref={menuRef}>
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 cursor-pointer">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 rounded-lg px-2 py-1 transition-colors duration-200">
               <span className="text-gray-700">{userName}</span>
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt="User Avatar" className="w-8 h-8 rounded-full" />
@@ -156,26 +157,19 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
 
       {/* Main Content */}
       <main className="flex flex-col items-center justify-center flex-grow text-center">
-        <div className="flex flex-col items-center w-full max-w-md mx-auto">
-          <div className="flex flex-col items-center w-full" style={{ gap: '0.8rem' }}>
-            <h1 className="text-2xl font-semibold text-gray-800 tracking-wide">
-              <span role="img" aria-label="crown">👑</span> 欢迎使用Voco（内测版）
+        <div className="flex flex-col items-center w-full max-w-sm mx-auto mt-[-3.5rem]">
+          <div className="flex flex-col items-center w-full" style={{ gap: '0.5rem' }}>
+            <h1 className="text-xl font-semibold text-gray-800 tracking-wide text-center animate-fade-in">
+              <span role="img" aria-label="crown">👑</span> Hi {userName}, 欢迎使用Voco
             </h1>
-            <p className="text-xl text-gray-800 tracking-wide">选择任何输入框，按住 <span className="font-semibold text-blue-500">Right Option</span> 键开始转写</p>
-            <p className="text-xl tracking-wide" style={{ color: '#f59e1a' }}>（每次可录最长60秒的语音）</p>
+            <p className="text-lg text-gray-800 tracking-wide text-center font-normal animate-fade-in-delayed">需要打字时，按住 <span className="font-semibold text-blue-500">右侧Option</span> 键开始语音转写</p>
           </div>
-          <button 
-            className="mt-10 px-8 py-3 border border-gray-300 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-xl font-semibold text-gray-600"
-            onClick={onNavigateToWip}
-            >
-            探索使用场景
-          </button>
         </div>
       </main>
       {/* AI Refinement Toggle */}
       <div className="fixed bottom-5 left-8 flex items-center">
         <div className="relative group">
-          <span className="text-sm font-medium text-gray-700 mr-2 cursor-help">AI润色</span>
+          <span className="text-sm font-medium text-gray-700 mr-2 cursor-help hover:text-gray-900 transition-colors duration-200">AI润色</span>
           {/* Tooltip */}
           <div className="absolute bottom-full left-0 ml-2 mb-2 px-4 py-2 bg-gray-100 text-gray-800 text-xs rounded-lg border border-gray-300 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none min-w-max z-50">
             保持原句风格，更加清晰易懂
@@ -198,7 +192,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       </div>
       {/* Question Mark Button */}
       <button
-        className="fixed bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-transparent border-0 shadow-none hover:bg-gray-100 z-20 cursor-pointer"
+        className="fixed bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-transparent border-0 shadow-none hover:bg-gray-200 hover:opacity-100 transition-all duration-200 z-20 cursor-pointer"
         style={{ fontSize: 0, opacity: 0.7 }}
         aria-label="帮助"
         onClick={() => setIsGuideOpen(true)}
@@ -239,6 +233,20 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
           </div>
         </div>
       )}
+      {/* Footer */}
+      <footer className="fixed bottom-5 left-1/2 transform -translate-x-1/2 text-gray-500 text-sm">
+        <a 
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            // @ts-ignore
+            window.electron.openExternal('https://vocoapp.co');
+          }}
+          className="hover:underline"
+        >
+          vocoapp.co
+        </a>
+      </footer>
     </div>
   );
 } 

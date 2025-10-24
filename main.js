@@ -171,8 +171,8 @@ function createWindow () {
   }
   mainWindow = new BrowserWindow({
     title: '登录',
-    width: 700,
-    height: 600,
+    width: 500,
+    height: 400,
     resizable: false,
     center: true,
     frame: true,

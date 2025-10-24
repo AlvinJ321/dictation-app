@@ -54,3 +54,22 @@ html, body {
 @keyframes l4 {
     to{width:15px;aspect-ratio: 1}
 }
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.8s ease-out 0.2s both;
+}
+
+.animate-fade-in-delayed {
+    animation: fadeIn 0.8s ease-out 1.3s both;
+}
