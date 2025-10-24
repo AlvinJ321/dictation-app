@@ -104,12 +104,12 @@ export default function SignInPage() {
       <div className="w-full max-w-sm p-6 relative" style={{ backgroundColor: '#FAFAF7' }}>
 
         {/* Header */}
-        <div className="text-center mb-12">
-          <img src={vocoIcon} alt="Voco" className="mb-4 h-16 w-auto mx-auto" />
+        <div className="text-center mb-6">
+          <img src={vocoIcon} alt="Voco" className="mb-2 h-12 w-auto mx-auto" />
         </div>
 
         {/* Form */}
-        <form onSubmit={handleAuthSubmit} className="space-y-6">
+        <form onSubmit={handleAuthSubmit} className="space-y-4">
           {/* Phone Input Group */}
           <div className="flex items-center space-x-2">
             <span className="px-3 py-2.5 rounded-lg font-semibold border border-gray-300 bg-white text-gray-600">+86</span>
@@ -154,7 +154,7 @@ export default function SignInPage() {
             {isLoading ? '登录中...' : '登录'}
           </button>
         </form>
-        <div className="text-center mt-4">
+        <div className="text-center mt-2">
           <span className="text-sm text-gray-600">
             还没有账号？
             <a
