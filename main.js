@@ -225,7 +225,7 @@ function createWindow () {
 
   // Initialize the audio handler once the window is created and pass the IPC function
   const isProduction = app.isPackaged;
-  const apiBaseUrl = isProduction ? 'http://47.117.8.146' : 'http://localhost:3001';
+  const apiBaseUrl = isProduction ? 'https://vocoapp.co' : 'http://localhost:3001';
 
   audioHandler = new MainProcessAudio(
     sendOrQueueIPC,

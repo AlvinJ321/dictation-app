@@ -7,7 +7,7 @@ import { resolve } from 'path';
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
   const API_BASE_URL = isProduction
-    ? 'http://47.117.8.146'
+    ? 'https://vocoapp.co'
     : 'http://localhost:3001';
 
   return {

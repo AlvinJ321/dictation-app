@@ -160,7 +160,7 @@ export default function SignInPage() {
             <a
               onClick={() => {
                 const isDev = window.location.protocol === 'http:';
-                const signupUrl = isDev ? 'http://localhost:5174/' : 'http://47.117.8.146/';
+                const signupUrl = isDev ? 'http://localhost:5174/' : 'https://vocoapp.co/';
                 // @ts-ignore
                 window.electron.openExternal(signupUrl);
               }}
