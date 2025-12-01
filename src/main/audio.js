@@ -32,6 +32,10 @@ class MainProcessAudio {
         this.warningTimer = null;
         this.countdownTimer = null;
         this.maxedOut = false;
+        this.realtimeSessionId = null;
+        this.audioStream = null;
+        this.wavHeaderParsed = false;
+        this.pcmDataStartOffset = 44; // Typical WAV header size
 
         this.audioRecorder = new AudioRecorder({
             program: isProd ? path.join(process.resourcesPath, 'sox') : 'sox',
@@ -122,105 +126,251 @@ class MainProcessAudio {
         }
     }
 
-    startRecording() {
+    async startRealtimeSession(accessToken) {
+        try {
+            const response = await axios.post(`${this.apiBaseUrl}/api/paraformer/realtime-session/start`, {}, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            return response.data.sessionId;
+        } catch (error) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                console.log('[MainAudio] Token expired, attempting to refresh...');
+                const newAccessToken = await this.refreshToken();
+                if (newAccessToken) {
+                    console.log('[MainAudio] Token refreshed, retrying startRealtimeSession...');
+                    return await this.startRealtimeSession(newAccessToken);
+                } else {
+                    throw new Error('Authentication failed. Please log in again.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    async sendRealtimeChunk(sessionId, pcmBuffer, accessToken) {
+        try {
+            await axios.post(`${this.apiBaseUrl}/api/paraformer/realtime-session/${sessionId}/chunk`, pcmBuffer, {
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                maxRedirects: 0,
+                validateStatus: (status) => status === 200 || status === 204
+            });
+        } catch (error) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                console.log('[MainAudio] Token expired during chunk send, attempting to refresh...');
+                const newAccessToken = await this.refreshToken();
+                if (newAccessToken) {
+                    console.log('[MainAudio] Token refreshed, retrying sendRealtimeChunk...');
+                    return await this.sendRealtimeChunk(sessionId, pcmBuffer, newAccessToken);
+                } else {
+                    console.error('[MainAudio] Failed to refresh token, chunk send failed');
+                    // Don't throw, just log - we don't want to stop recording on a single chunk failure
+                }
+            } else {
+                console.error('[MainAudio] Failed to send realtime chunk:', error.message);
+                // Don't throw, just log - we don't want to stop recording on a single chunk failure
+            }
+        }
+    }
+
+    async finishRealtimeSession(sessionId, accessToken) {
+        try {
+            const response = await axios.post(`${this.apiBaseUrl}/api/paraformer/realtime-session/${sessionId}/finish`, {}, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            return response.data;
+        } catch (error) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                console.log('[MainAudio] Token expired, attempting to refresh...');
+                const newAccessToken = await this.refreshToken();
+                if (newAccessToken) {
+                    console.log('[MainAudio] Token refreshed, retrying finishRealtimeSession...');
+                    return await this.finishRealtimeSession(sessionId, newAccessToken);
+                } else {
+                    throw new Error('Authentication failed. Please log in again.');
+                }
+            }
+            throw error;
+        }
+    }
+
+    // Parse WAV header to find where PCM data starts
+    parseWavHeader(buffer) {
+        if (buffer.length < 44) {
+            return null; // Not enough data for header
+        }
+
+        // Check RIFF header
+        const riff = buffer.toString('ascii', 0, 4);
+        if (riff !== 'RIFF') {
+            return null;
+        }
+
+        // Check WAVE header
+        const wave = buffer.toString('ascii', 8, 12);
+        if (wave !== 'WAVE') {
+            return null;
+        }
+
+        // Find 'data' chunk
+        let dataOffset = 12;
+        while (dataOffset < buffer.length - 8) {
+            const chunkId = buffer.toString('ascii', dataOffset, dataOffset + 4);
+            const chunkSize = buffer.readUInt32LE(dataOffset + 4);
+            
+            if (chunkId === 'data') {
+                return dataOffset + 8; // Return offset to actual PCM data
+            }
+            
+            dataOffset += 8 + chunkSize;
+        }
+
+        return 44; // Fallback to typical header size
+    }
+
+    async startRecording() {
         console.log('[DEBUG] MainProcessAudio.startRecording called');
         if (this.isRecording) {
             console.log('[MainAudio] Already recording.');
             return;
         }
 
-        console.log('[MainAudio] Starting recording...');
-        this.isRecording = true;
-        
-        // Create feedback window and send initial status
-        this.createFeedbackWindow('recording');
-        
-        // This IPC is for the main window, the feedback window gets it from its creator
-        this.sendIPC('recording-status', 'recording');
+        // Check for access token before starting
+        const encryptedAccessToken = this.store.get('accessToken');
+        if (!encryptedAccessToken) {
+            console.log('[MainAudio] No access token found. Blocking transcription.');
+            this.sendIPC('transcription-result', {
+                success: false,
+                error: 'You must be logged in to transcribe.'
+            });
+            this.sendIPC('recording-status', 'error');
+            return;
+        }
 
-        const fileStream = fs.createWriteStream(this.fileName, { encoding: 'binary' });
-        this.audioRecorder.start().stream().pipe(fileStream);
+        const accessToken = safeStorage.isEncryptionAvailable()
+            ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
+            : encryptedAccessToken;
 
-        fileStream.on('finish', async () => {
-            console.log('[MainAudio] Finished writing to file, starting processing.');
-            try {
-                this.sendIPC('recording-status', 'processing');
+        try {
+            console.log('[MainAudio] Starting realtime session...');
+            // Start realtime session first
+            const sessionId = await this.startRealtimeSession(accessToken);
+            this.realtimeSessionId = sessionId;
+            console.log('[MainAudio] Realtime session started:', sessionId);
 
-                const encryptedAccessToken = this.store.get('accessToken');
-                if (!encryptedAccessToken) {
-                    console.log('[MainAudio] No access token found. Blocking transcription.');
-                    this.sendIPC('transcription-result', {
-                        success: false,
-                        error: 'You must be logged in to transcribe.'
-                    });
-                    this.sendIPC('recording-status', 'error');
+            console.log('[MainAudio] Starting recording...');
+            this.isRecording = true;
+            this.wavHeaderParsed = false;
+            this.pcmDataStartOffset = 44;
+            
+            // Create feedback window and send initial status
+            this.createFeedbackWindow('recording');
+            
+            // This IPC is for the main window, the feedback window gets it from its creator
+            this.sendIPC('recording-status', 'recording');
+
+            // Get the audio stream
+            this.audioStream = this.audioRecorder.start().stream();
+            let wavHeaderBuffer = Buffer.alloc(0);
+
+            // Handle audio chunks
+            this.audioStream.on('data', async (chunk) => {
+                if (!this.isRecording || !this.realtimeSessionId) {
                     return;
                 }
-                
-                const accessToken = safeStorage.isEncryptionAvailable()
-                    ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
-                    : encryptedAccessToken;
 
-                const audioBuffer = fs.readFileSync(this.fileName);
-                console.log(`[MainAudio] Read file of size: ${audioBuffer.length}`);
-                
-                const isRefinementOn = this.getRefinementState();
-                const response = await this.makeSpeechRequest(audioBuffer, accessToken, isRefinementOn);
-
-                if (response.data.transcript) {
-                    robot.typeString(response.data.transcript);
-                    this.sendIPC('transcription-result', { success: true, maxedOut: this.maxedOut });
-                    this.sendIPC('recording-status', 'success');
-                } else if (response.data.error) {
-                    console.error('[MainAudio] ASR service returned an error:', response.data.error);
-                    this.sendIPC('transcription-result', { success: false, error: response.data.error });
-                    this.sendIPC('recording-status', 'error');
+                // Accumulate header bytes until we have enough to parse
+                if (!this.wavHeaderParsed) {
+                    wavHeaderBuffer = Buffer.concat([wavHeaderBuffer, chunk]);
+                    
+                    if (wavHeaderBuffer.length >= 44) {
+                        // Try to parse the header
+                        const pcmOffset = this.parseWavHeader(wavHeaderBuffer);
+                        if (pcmOffset !== null) {
+                            this.pcmDataStartOffset = pcmOffset;
+                            this.wavHeaderParsed = true;
+                            
+                            // Send any PCM data that comes after the header in this chunk
+                            if (wavHeaderBuffer.length > pcmOffset) {
+                                const pcmData = wavHeaderBuffer.slice(pcmOffset);
+                                // Fire and forget - don't block audio processing
+                                this.sendRealtimeChunk(this.realtimeSessionId, pcmData, accessToken)
+                                    .catch(err => console.error('[MainAudio] Failed to send initial chunk:', err));
+                            }
+                        } else {
+                            // If we can't parse, assume standard 44-byte header
+                            this.pcmDataStartOffset = 44;
+                            this.wavHeaderParsed = true;
+                            
+                            if (wavHeaderBuffer.length > 44) {
+                                const pcmData = wavHeaderBuffer.slice(44);
+                                this.sendRealtimeChunk(this.realtimeSessionId, pcmData, accessToken)
+                                    .catch(err => console.error('[MainAudio] Failed to send initial chunk:', err));
+                            }
+                        }
+                    }
+                } else {
+                    // Header already parsed, send chunk as-is (it's already PCM data)
+                    // Fire and forget - don't block audio processing
+                    this.sendRealtimeChunk(this.realtimeSessionId, chunk, accessToken)
+                        .catch(err => console.error('[MainAudio] Failed to send chunk:', err));
                 }
-            } catch (error) {
-                console.error('[MainAudio] Error during transcription processing:', error.message);
-                this.sendIPC('transcription-result', { success: false, error: error.message });
-                this.sendIPC('recording-status', 'error');
-            } finally {
-                this.sendIPC('recording-status', 'idle');
-                this.destroyFeedbackWindow(); // Destroy the window when processing is done
-                if (fs.existsSync(this.fileName)) {
-                    fs.unlinkSync(this.fileName);
-                }
-                this.maxedOut = false;
-            }
-        });
-
-        // Set a timeout to warn the user at 50 seconds
-        this.warningTimer = setTimeout(() => {
-            console.log('[MainAudio] 50 seconds reached, warning user.');
-            this.sendIPC('recording-status', 'warning');
-            const warningSoundPath = isProd
-              ? path.join(process.resourcesPath, 'sfx', '50seconds.mp3')
-              : path.join(__dirname, '../../sfx/50seconds.mp3');
-            this.player.play(warningSoundPath, (err) => {
-                if (err) console.error('Error playing 50-second warning sound:', err);
             });
-            
-            // Start countdown from 10 seconds
-            let remainingTime = 10;
-            this.sendIPC('countdown-update', remainingTime);
-            
-            this.countdownTimer = setInterval(() => {
-                remainingTime--;
+
+            this.audioStream.on('end', () => {
+                console.log('[MainAudio] Audio stream ended.');
+            });
+
+            this.audioStream.on('error', (err) => {
+                console.error('[MainAudio] Audio stream error:', err);
+                this.sendIPC('recording-status', 'error');
+                this.sendIPC('transcription-result', { success: false, error: err.message });
+            });
+
+            // Set a timeout to warn the user at 50 seconds
+            this.warningTimer = setTimeout(() => {
+                console.log('[MainAudio] 50 seconds reached, warning user.');
+                this.sendIPC('recording-status', 'warning');
+                const warningSoundPath = isProd
+                  ? path.join(process.resourcesPath, 'sfx', '50seconds.mp3')
+                  : path.join(__dirname, '../../sfx/50seconds.mp3');
+                this.player.play(warningSoundPath, (err) => {
+                    if (err) console.error('Error playing 50-second warning sound:', err);
+                });
+                
+                // Start countdown from 10 seconds
+                let remainingTime = 10;
                 this.sendIPC('countdown-update', remainingTime);
                 
-                if (remainingTime <= 0) {
-                    clearInterval(this.countdownTimer);
-                    this.countdownTimer = null;
-                }
-            }, 1000);
-        }, 50000);
+                this.countdownTimer = setInterval(() => {
+                    remainingTime--;
+                    this.sendIPC('countdown-update', remainingTime);
+                    
+                    if (remainingTime <= 0) {
+                        clearInterval(this.countdownTimer);
+                        this.countdownTimer = null;
+                    }
+                }, 1000);
+            }, 50000);
 
-        // Set a timeout to automatically stop recording at 60 seconds
-        this.recordingTimer = setTimeout(() => {
-            console.log('[MainAudio] 60 seconds reached, stopping recording.');
-            this.stopRecordingAndProcess({ maxedOut: true });
-        }, 60000);
+            // Set a timeout to automatically stop recording at 60 seconds
+            this.recordingTimer = setTimeout(() => {
+                console.log('[MainAudio] 60 seconds reached, stopping recording.');
+                this.stopRecordingAndProcess({ maxedOut: true });
+            }, 60000);
+        } catch (error) {
+            console.error('[MainAudio] Error starting recording:', error.message);
+            this.isRecording = false;
+            this.realtimeSessionId = null;
+            this.sendIPC('recording-status', 'error');
+            this.sendIPC('transcription-result', { success: false, error: error.message });
+        }
     }
 
     async stopRecordingAndProcess(options = {}) {
@@ -240,7 +390,15 @@ class MainProcessAudio {
         console.log('[MainAudio] Stopping recording...');
         this.isRecording = false;
         this.maxedOut = options.maxedOut || false;
+        
+        // Stop the audio recorder
         this.audioRecorder.stop();
+        
+        // Clean up stream reference
+        if (this.audioStream) {
+            this.audioStream.removeAllListeners();
+            this.audioStream = null;
+        }
 
         if (options.maxedOut) {
             const stopSoundPath = isProd
@@ -249,6 +407,66 @@ class MainProcessAudio {
             this.player.play(stopSoundPath, (err) => {
                 if (err) console.error('Error playing stop sound:', err);
             });
+        }
+
+        // Finish the realtime session and get transcript
+        const sessionId = this.realtimeSessionId;
+        if (!sessionId) {
+            console.error('[MainAudio] No session ID found. Cannot finish session.');
+            this.sendIPC('recording-status', 'error');
+            this.sendIPC('transcription-result', { success: false, error: 'No active session found.' });
+            this.sendIPC('recording-status', 'idle');
+            this.destroyFeedbackWindow();
+            return;
+        }
+
+        try {
+            this.sendIPC('recording-status', 'processing');
+
+            const encryptedAccessToken = this.store.get('accessToken');
+            if (!encryptedAccessToken) {
+                console.log('[MainAudio] No access token found. Blocking transcription.');
+                this.sendIPC('transcription-result', {
+                    success: false,
+                    error: 'You must be logged in to transcribe.'
+                });
+                this.sendIPC('recording-status', 'error');
+                this.sendIPC('recording-status', 'idle');
+                this.destroyFeedbackWindow();
+                this.realtimeSessionId = null;
+                return;
+            }
+
+            const accessToken = safeStorage.isEncryptionAvailable()
+                ? safeStorage.decryptString(Buffer.from(encryptedAccessToken, 'latin1'))
+                : encryptedAccessToken;
+
+            console.log('[MainAudio] Finishing realtime session:', sessionId);
+            const result = await this.finishRealtimeSession(sessionId, accessToken);
+
+            if (result && result.transcript) {
+                console.log('[MainAudio] Transcript received:', result.transcript);
+                robot.typeString(result.transcript);
+                this.sendIPC('transcription-result', { success: true, maxedOut: this.maxedOut });
+                this.sendIPC('recording-status', 'success');
+            } else if (result && result.error) {
+                console.error('[MainAudio] ASR service returned an error:', result.error);
+                this.sendIPC('transcription-result', { success: false, error: result.error });
+                this.sendIPC('recording-status', 'error');
+            } else {
+                console.error('[MainAudio] No transcript or error in result:', result);
+                this.sendIPC('transcription-result', { success: false, error: 'No transcript received from server.' });
+                this.sendIPC('recording-status', 'error');
+            }
+        } catch (error) {
+            console.error('[MainAudio] Error during transcription processing:', error.message);
+            this.sendIPC('transcription-result', { success: false, error: error.message });
+            this.sendIPC('recording-status', 'error');
+        } finally {
+            this.sendIPC('recording-status', 'idle');
+            this.destroyFeedbackWindow();
+            this.realtimeSessionId = null;
+            this.maxedOut = false;
         }
     }
 }
