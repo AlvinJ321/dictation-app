@@ -126,9 +126,13 @@ class MainProcessAudio {
         }
     }
 
-    async startRealtimeSession(accessToken) {
+    async startRealtimeSession(accessToken, isRefinementOn = false) {
         try {
-            const response = await axios.post(`${this.apiBaseUrl}/api/paraformer/realtime-session/start`, {}, {
+            const url = new URL(`${this.apiBaseUrl}/api/paraformer/realtime-session/start`);
+            if (isRefinementOn) {
+                url.searchParams.append('refine', 'true');
+            }
+            const response = await axios.post(url.toString(), {}, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
                 }
@@ -140,7 +144,7 @@ class MainProcessAudio {
                 const newAccessToken = await this.refreshToken();
                 if (newAccessToken) {
                     console.log('[MainAudio] Token refreshed, retrying startRealtimeSession...');
-                    return await this.startRealtimeSession(newAccessToken);
+                    return await this.startRealtimeSession(newAccessToken, isRefinementOn);
                 } else {
                     throw new Error('Authentication failed. Please log in again.');
                 }
@@ -259,8 +263,10 @@ class MainProcessAudio {
 
         try {
             console.log('[MainAudio] Starting realtime session...');
+            // Get refinement state
+            const isRefinementOn = this.getRefinementState();
             // Start realtime session first
-            const sessionId = await this.startRealtimeSession(accessToken);
+            const sessionId = await this.startRealtimeSession(accessToken, isRefinementOn);
             this.realtimeSessionId = sessionId;
             console.log('[MainAudio] Realtime session started:', sessionId);
 
