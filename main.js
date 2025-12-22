@@ -16,6 +16,7 @@ let serverProcess; // Variable to hold the server child process
 let audioHandler;
 let keyListener;
 let rightOptionPressed = false; // Moved to top-level scope
+let recordingStartPromise = null; // Track the Promise for starting recording to handle quick clicks
 let store; // Define store in the top-level scope
 let isRefinementOn = true; // Default to ON
 let lastPermissions = { mic: false, accessibility: false };
@@ -493,7 +494,9 @@ app.whenReady().then(async () => {
     if (e.state === "DOWN" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
       if (!rightOptionPressed) {
         rightOptionPressed = true;
-        console.log("[DEBUG] Right Option key DOWN detected, permissions check next.");
+        // Clear any previous recording start promise (safety measure)
+        recordingStartPromise = null;
+        console.log("[DEBUG] Right Option key DOWN detected, starting recording immediately.");
 
         // Check permissions when user first tries to use the app
         if (!permissionsChecked) {
@@ -514,29 +517,60 @@ app.whenReady().then(async () => {
           return;
         }
 
+        // Start recording immediately (no delay)
         console.log('[DEBUG] Permissions OK. Starting recording.');
         if (feedbackWindow) feedbackWindow.showInactive();
-        const startSoundPath = isProd 
-          ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
-          : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
-        player.play(startSoundPath, (err) => {
-          if (err) console.error('Error playing start sound:', err);
+        
+        // Save Promise to handle quick clicks where key is released before recording starts
+        recordingStartPromise = audioHandler.startRecording();
+        
+        // Play start sound only after recording actually starts (and user is still holding the key)
+        recordingStartPromise.then(() => {
+          // Only play sound if user is still holding the key (not a quick click)
+          if (rightOptionPressed && audioHandler.isRecording) {
+            const startSoundPath = isProd 
+              ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
+              : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
+            player.play(startSoundPath, (err) => {
+              if (err) console.error('Error playing start sound:', err);
+            });
+          }
+        }).catch((err) => {
+          console.error('[DEBUG] Error starting recording:', err);
         });
-        audioHandler.startRecording();
       }
     } else if (e.state === "UP" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
-      if (rightOptionPressed && audioHandler.isRecording) {
+      // Stop recording if key was pressed (handle both recording and starting states)
+      if (rightOptionPressed) {
         rightOptionPressed = false;
         console.log('[DEBUG] Right Option key UP detected, stopping recording.');
-        const stopSoundPath = isProd
-          ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
-          : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');
-        player.play(stopSoundPath, (err) => {
-          if (err) console.error('Error playing stop sound:', err);
-        });
-        audioHandler.stopRecordingAndProcess();
-      } else {
-        rightOptionPressed = false;
+        
+        // If recording has already started, stop it and play stop sound
+        if (audioHandler.isRecording) {
+          const stopSoundPath = isProd
+            ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
+            : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');
+          player.play(stopSoundPath, (err) => {
+            if (err) console.error('Error playing stop sound:', err);
+          });
+          audioHandler.stopRecordingAndProcess();
+        } else if (recordingStartPromise) {
+          // If recording is still starting (quick click scenario), wait for it to start then stop immediately
+          // Don't play stop sound for quick clicks (recording never actually started from user's perspective)
+          console.log('[DEBUG] Key released while recording was starting, will stop when recording starts (no sound for quick click).');
+          recordingStartPromise.then(() => {
+            // Recording has started, now stop it immediately (but don't play sound as it was a quick click)
+            if (audioHandler.isRecording) {
+              console.log('[DEBUG] Recording started, stopping immediately due to quick click (no stop sound).');
+              audioHandler.stopRecordingAndProcess();
+            }
+          }).catch((err) => {
+            console.error('[DEBUG] Error in recording start promise:', err);
+          });
+          recordingStartPromise = null;
+        } else {
+          console.log('[DEBUG] Key released but no recording was started.');
+        }
       }
     }
   });

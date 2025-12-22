@@ -1,4 +1,27 @@
-<!-- c9ded6dc-c894-4348-8702-11617b43cb4c 0b05babc-0b35-48bb-ab1e-795556dc36c6 -->
+---
+name: Migrate Electron App to Paraformer Realtime Streaming ASR
+overview: ""
+todos:
+  - id: e61dd7ce-ffb7-4c35-956e-69dfe36a5ab0
+    content: Create paraformerStreamingClient service with startRealtimeSession, sendRealtimeChunk, finishRealtimeSession functions
+    status: pending
+  - id: c79d1a93-a003-4b8e-aab0-f28b1b746be8
+    content: "Modify renderer.js to stream audio chunks in real-time: add downsampling, PCM conversion, and chunk sending logic"
+    status: pending
+  - id: 6b0cec95-b420-4d3e-add1-1bc85e755678
+    content: Add IPC channels in preload.js and handlers in main.js/renderer.js for streaming coordination
+    status: pending
+  - id: e4f362c7-cd3d-4be7-8a15-ebfe9278f5b5
+    content: Update MainProcessAudio.startRecording() and stopRecordingAndProcess() to use streaming API instead of file-based recording
+    status: pending
+  - id: 7f2dc0d1-5a08-44aa-8b12-8d6a5f63bff3
+    content: Remove old file-based recording code (node-audiorecorder, file writing) from audio.js
+    status: pending
+  - id: 1622cb78-2245-4908-ae1a-5636c229c098
+    content: Implement error handling for network errors, session failures, and resource cleanup in both main and renderer processes
+    status: pending
+---
+
 # Migrate Electron App to Paraformer Realtime Streaming ASR
 
 ## Overview
@@ -142,12 +165,3 @@ The backend will provide these endpoints (based on POC implementation):
 
 - No new dependencies needed for Electron app (using native Web APIs and existing packages)
 - Backend changes are out of scope but will need to enable the streaming endpoints
-
-### To-dos
-
-- [ ] Create paraformerStreamingClient service with startRealtimeSession, sendRealtimeChunk, finishRealtimeSession functions
-- [ ] Modify renderer.js to stream audio chunks in real-time: add downsampling, PCM conversion, and chunk sending logic
-- [ ] Add IPC channels in preload.js and handlers in main.js/renderer.js for streaming coordination
-- [ ] Update MainProcessAudio.startRecording() and stopRecordingAndProcess() to use streaming API instead of file-based recording
-- [ ] Remove old file-based recording code (node-audiorecorder, file writing) from audio.js
-- [ ] Implement error handling for network errors, session failures, and resource cleanup in both main and renderer processes
