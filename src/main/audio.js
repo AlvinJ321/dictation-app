@@ -452,6 +452,8 @@ class MainProcessAudio {
 
             if (result && result.transcript) {
                 console.log('[MainAudio] Transcript received:', result.transcript);
+                // 设置极短的键盘延迟，让文字几乎瞬间全部出现，而不是逐字显示
+                robot.setKeyboardDelay(1);
                 robot.typeString(result.transcript);
                 this.sendIPC('transcription-result', { success: true, maxedOut: this.maxedOut });
                 this.sendIPC('recording-status', 'success');
