@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Mic, Loader, Check, XCircle } from 'lucide-react';
+import { User, LogOut, Mic, Loader, Check, XCircle, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import appIcon from '../../resource/Voco-app-icon.png';
 
@@ -88,6 +88,18 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
     logout();
   };
 
+  const handleHelpAndFeedback = () => {
+    // 根据环境构建帮助与反馈页面URL
+    const isProduction = import.meta.env.MODE === 'production';
+    const supportUrl = isProduction 
+      ? `${import.meta.env.VITE_API_BASE_URL}/?page=support`
+      : `http://localhost:5173/?page=support`;
+    // 使用默认浏览器打开URL
+    window.electron.openExternal(supportUrl);
+    // 关闭菜单
+    setIsMenuOpen(false);
+  };
+
   const renderStatusIcon = () => {
     switch (status) {
       case 'recording':
@@ -143,6 +155,13 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
             </button>
             {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                    <button
+                        onClick={handleHelpAndFeedback}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                        <HelpCircle className="w-4 h-4 mr-2" />
+                        帮助与反馈
+                    </button>
                     <button
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
