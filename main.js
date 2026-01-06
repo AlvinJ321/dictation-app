@@ -471,6 +471,41 @@ app.whenReady().then(async () => {
     console.log(`[Main] AI Refinement state set to: ${isRefinementOn}`);
   });
 
+  // Receipt handling
+  ipcMain.handle('get-app-receipt', async () => {
+    try {
+      // In Mac App Store builds, the receipt is at Contents/_MASReceipt/receipt
+      // inside the .app bundle.
+      // app.getAppPath() returns the path to the app's source (usually inside Contents/Resources/app.asar)
+      // So we need to go up to find the receipt.
+      
+      let receiptPath;
+      if (app.isPackaged) {
+        // Standard path in macOS app bundle
+        const appBundlePath = path.dirname(path.dirname(app.getAppPath())); // Go up from Resources/app.asar to Contents
+        receiptPath = path.join(appBundlePath, '_MASReceipt', 'receipt');
+      } else {
+        // Dev mode: return a dummy receipt for testing
+        console.log('[Main] Dev mode: Returning mock receipt.');
+        // Backend expects 'TEST_RECEIPT_VIP' prefix for mock logic
+        // format: TEST_RECEIPT_VIP:<custom_device_id>
+        return 'TEST_RECEIPT_VIP:local_dev_device';
+      }
+
+      const fs = require('fs');
+      if (fs.existsSync(receiptPath)) {
+        const receipt = fs.readFileSync(receiptPath);
+        return receipt.toString('base64');
+      } else {
+        console.log('[Main] No receipt found at:', receiptPath);
+        return null;
+      }
+    } catch (error) {
+      console.error('[Main] Error reading receipt:', error);
+      return null;
+    }
+  });
+
   // Permission-related IPC handlers
   ipcMain.handle('check-permissions', async () => {
     return await checkPermissionsOnly();

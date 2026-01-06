@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Mic, Loader, Check, XCircle, HelpCircle } from 'lucide-react';
+import { User, LogOut, Mic, Loader, Check, XCircle, HelpCircle, Crown, RefreshCw, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { subscriptionService } from '../services/subscriptionService';
 import appIcon from '../../resource/Voco-app-icon.png';
 
 type Status = 'idle' | 'recording' | 'processing' | 'success' | 'error' | 'warning';
@@ -10,15 +11,39 @@ interface AppPageProps {
 }
 
 export default function AppPage({ onNavigateToWip }: AppPageProps) {
-  const { logout, user } = useAuth();
+  const { logout, user, subscription, refreshSubscription } = useAuth();
   const [status, setStatus] = useState<Status>('idle');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isRefinementOn, setIsRefinementOn] = useState(true);
+  const [isRestoring, setIsRestoring] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
+  const isVip = subscription?.is_vip;
+
+  const handleRestorePurchase = async () => {
+    setIsRestoring(true);
+    console.log('[AppPage] Starting restore purchase flow...');
+    try {
+      const result = await subscriptionService.restorePurchase();
+      console.log('[AppPage] Restore result:', result);
+      
+      if (result.success) {
+        await refreshSubscription();
+        alert(`测试成功：${result.message}`);
+      } else {
+        console.error('[AppPage] Restore failed:', result.message);
+        alert(`恢复失败: ${result.message}`);
+      }
+    } catch (error: any) {
+      console.error('[AppPage] Restore exception:', error);
+      alert(`发生错误: ${error.message || '未知错误'}`);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   useEffect(() => {
     const handleStatusChange = (newStatus: Status) => {
@@ -154,22 +179,41 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
               )}
             </button>
             {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                    <button
-                        onClick={handleHelpAndFeedback}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                        <HelpCircle className="w-4 h-4 mr-2" />
-                        帮助与反馈
-                    </button>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        退出登录
-                    </button>
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <p className="text-sm font-semibold text-gray-900">{userName}</p>
+                  <p className="text-xs text-gray-500 truncate">{user?.phoneNumber}</p>
+                  {isVip && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
+                    Pro Member
+                  </span>}
                 </div>
+                
+                {!isVip && (
+                  <button
+                    onClick={handleRestorePurchase}
+                    disabled={isRestoring}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRestoring ? 'animate-spin' : ''}`} />
+                    {isRestoring ? '恢复中...' : '恢复购买'}
+                  </button>
+                )}
+
+                <button
+                  onClick={handleHelpAndFeedback}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  帮助与反馈
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  退出登录
+                </button>
+              </div>
             )}
         </div>
       </header>
@@ -178,8 +222,14 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
       <main className="flex flex-col items-center justify-center flex-grow text-center">
         <div className="flex flex-col items-center w-full max-w-sm mx-auto mt-[-3.5rem]">
           <div className="flex flex-col items-center w-full" style={{ gap: '0.5rem' }}>
-            <h1 className="text-xl font-semibold text-gray-800 tracking-wide text-center animate-fade-in">
-              <span role="img" aria-label="crown">👑</span> Hi {userName}, 欢迎使用Voco
+            <h1 className="text-xl font-semibold text-gray-800 tracking-wide text-center animate-fade-in flex items-center justify-center gap-2">
+              {isVip && <Crown className="w-6 h-6 text-yellow-500" fill="currentColor" />}
+              <span>Hi {userName}, 欢迎使用Voco</span>
+              {!isVip && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 shadow-sm">
+                  试用
+                </span>
+              )}
             </h1>
             <p className="text-lg text-gray-800 tracking-wide text-center font-normal animate-fade-in-delayed">需要打字时，按住 <span className="font-semibold text-blue-500">右侧Option</span> 键开始说话，松开按键完成转写</p>
           </div>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiFetch from '../lib/api';
 import { getTokens } from '../lib/store';
+import { subscriptionService, SubscriptionStatus } from '../services/subscriptionService';
 
 // This is the important part of the fix: we will now call the method exposed in preload.js
 declare global {
@@ -17,6 +18,7 @@ declare global {
       removeTranscriptionResultListener: (callback: (result: { success: boolean, text?: string, error?: string }) => void) => void;
       onAuthFailed: (callback: (data: { reason: string }) => void) => void;
       removeAuthFailedListener: (callback: (data: { reason: string }) => void) => void;
+      getAppStoreReceipt: () => Promise<string | null>;
     }
   }
 }
@@ -30,6 +32,8 @@ interface AuthContextType {
     avatarUrl: string;
     avatarKey: string;
   } | null;
+  subscription: SubscriptionStatus | null;
+  refreshSubscription: () => Promise<void>;
   login: (tokens: { accessToken: string; refreshToken:string }) => void;
   logout: () => void;
   isLoading: boolean;
@@ -40,7 +44,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<AuthContextType['user']>(null);
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSubscriptionStatus = async () => {
+    const status = await subscriptionService.getStatus();
+    if (status) {
+      setSubscription(status);
+    }
+  };
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -56,14 +68,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const userData = await response.json();
             setUser(userData);
             setIsAuthenticated(true);
+            await fetchSubscriptionStatus();
         } else {
             setIsAuthenticated(false);
             setUser(null);
+            setSubscription(null);
         }
       } catch (error) {
         console.error('Authentication check failed:', error);
         setIsAuthenticated(false);
         setUser(null);
+        setSubscription(null);
       } finally {
         setIsLoading(false);
       }
@@ -81,9 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!response.ok) throw new Error('Failed to fetch user');
         const userData = await response.json();
         setUser(userData);
+        await fetchSubscriptionStatus();
       } catch (error) {
         console.error("Failed to fetch user on login", error);
         setUser(null);
+        setSubscription(null);
       }
     };
     fetchUser();
@@ -106,10 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.electron.store.clearTokens(); 
     setIsAuthenticated(false);
     setUser(null);
+    setSubscription(null);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, subscription, refreshSubscription: fetchSubscriptionStatus, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,5 +9,6 @@ interface Window {
       removeRecordingStatusListener: (callback: (status: Status) => void) => void;
       onTranscriptionResult: (callback: (result: TranscriptionResult) => void) => void;
       removeTranscriptionResultListener: (callback: (result: TranscriptionResult) => void) => void;
+      getAppStoreReceipt: () => Promise<string | null>;
     };
   }

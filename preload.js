@@ -35,6 +35,11 @@ contextBridge.exposeInMainWorld('electron', {
     },
   },
 
+  // SUBSCRIPTION
+  getAppStoreReceipt: async () => {
+    return await ipcRenderer.invoke('get-app-receipt');
+  },
+
   // PERMISSION MANAGEMENT
   permissions: {
     async check() {
