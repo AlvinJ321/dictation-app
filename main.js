@@ -243,7 +243,88 @@ const TARGET_KEY_NAME_PRIMARY = 'RIGHT ALT'; // Corrected: This was the working 
 const TARGET_KEY_NAME_SECONDARY = 'RIGHT OPTION'; // Fallback
 const TARGET_KEY_NAME_TERTIARY = 'ALTGR'; // Another possibility
 
+let isHandsFreeMode = false;
+let lastOptionPressTime = 0;
+let doubleClickTimer = null;
+const DOUBLE_CLICK_DELAY = 300; // ms to wait for double click
+
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
+
+// Helper function to start recording
+async function startRecordingLogic() {
+  // Check permissions when user first tries to use the app
+  if (!permissionsChecked) {
+    console.log('[Main] First time using app, checking permissions...');
+    lastPermissions = await checkAndRequestPermissions(true);
+    permissionsChecked = true;
+  }
+
+  // Permission checks
+  const micAccess = systemPreferences.getMediaAccessStatus('microphone');
+  const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
+
+  console.log(`[DEBUG] micAccess: ${micAccess}, accessibilityAccess: ${accessibilityAccess}`);
+
+  if (micAccess !== 'granted' || !accessibilityAccess) {
+    console.warn(`[DEBUG] Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
+    rightOptionPressed = false; // Reset state
+    return;
+  }
+
+  // Start recording immediately (no delay)
+  console.log('[DEBUG] Permissions OK. Starting recording.');
+  if (feedbackWindow) feedbackWindow.showInactive();
+  
+  // Save Promise to handle quick clicks where key is released before recording starts
+  recordingStartPromise = audioHandler.startRecording();
+  
+  // Play start sound only after recording actually starts
+  recordingStartPromise.then(() => {
+    // Only play sound if user is still holding the key OR is in hands-free mode
+    if ((rightOptionPressed || isHandsFreeMode) && audioHandler.isRecording) {
+      const startSoundPath = isProd 
+        ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
+        : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
+      player.play(startSoundPath, (err) => {
+        if (err) console.error('Error playing start sound:', err);
+      });
+    }
+  }).catch((err) => {
+    console.error('[DEBUG] Error starting recording:', err);
+  });
+}
+
+// Helper function to stop recording
+function stopRecordingLogic() {
+  console.log('[DEBUG] Stop recording logic triggered.');
+  
+  // If recording has already started, stop it and play stop sound
+  if (audioHandler.isRecording) {
+    const stopSoundPath = isProd
+      ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
+      : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');
+    player.play(stopSoundPath, (err) => {
+      if (err) console.error('Error playing stop sound:', err);
+    });
+    audioHandler.stopRecordingAndProcess();
+  } else if (recordingStartPromise) {
+    // If recording is still starting (quick click scenario), wait for it to start then stop immediately
+    // Don't play stop sound for quick clicks (recording never actually started from user's perspective)
+    console.log('[DEBUG] Key released while recording was starting, will stop when recording starts (no sound for quick click).');
+    recordingStartPromise.then(() => {
+      // Recording has started, now stop it immediately (but don't play sound as it was a quick click)
+      if (audioHandler.isRecording) {
+        console.log('[DEBUG] Recording started, stopping immediately due to quick click (no stop sound).');
+        audioHandler.stopRecordingAndProcess();
+      }
+    }).catch((err) => {
+      console.error('[DEBUG] Error in recording start promise:', err);
+    });
+    recordingStartPromise = null;
+  } else {
+    console.log('[DEBUG] Stop requested but no recording was started.');
+  }
+}
 
 async function checkAndRequestPermissions(promptForAccessibility = true) {
   if (process.platform === 'darwin') {
@@ -524,87 +605,77 @@ app.whenReady().then(async () => {
 
   keyListener.addListener(async (e, down) => {
     const keyName = e.name;
-    console.log(`[DEBUG] Key event: ${e.state} - ${keyName}`);
+    // console.log(`[DEBUG] Key event: ${e.state} - ${keyName}`);
 
-    if (e.state === "DOWN" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
-      if (!rightOptionPressed) {
-        rightOptionPressed = true;
-        // Clear any previous recording start promise (safety measure)
-        recordingStartPromise = null;
-        console.log("[DEBUG] Right Option key DOWN detected, starting recording immediately.");
+    const isOptionKey = (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY);
 
-        // Check permissions when user first tries to use the app
-        if (!permissionsChecked) {
-          console.log('[Main] First time using app, checking permissions...');
-          lastPermissions = await checkAndRequestPermissions(true);
-          permissionsChecked = true;
-        }
+    if (isOptionKey) {
+      const now = Date.now();
 
-        // Permission checks
-        const micAccess = systemPreferences.getMediaAccessStatus('microphone');
-        const accessibilityAccess = systemPreferences.isTrustedAccessibilityClient(false);
-
-        console.log(`[DEBUG] micAccess: ${micAccess}, accessibilityAccess: ${accessibilityAccess}`);
-
-        if (micAccess !== 'granted' || !accessibilityAccess) {
-          console.warn(`[DEBUG] Dictation blocked. Mic: ${micAccess}, Accessibility: ${accessibilityAccess}`);
-          rightOptionPressed = false; // Reset state
-          return;
-        }
-
-        // Start recording immediately (no delay)
-        console.log('[DEBUG] Permissions OK. Starting recording.');
-        if (feedbackWindow) feedbackWindow.showInactive();
-        
-        // Save Promise to handle quick clicks where key is released before recording starts
-        recordingStartPromise = audioHandler.startRecording();
-        
-        // Play start sound only after recording actually starts (and user is still holding the key)
-        recordingStartPromise.then(() => {
-          // Only play sound if user is still holding the key (not a quick click)
-          if (rightOptionPressed && audioHandler.isRecording) {
-            const startSoundPath = isProd 
-              ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
-              : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
-            player.play(startSoundPath, (err) => {
-              if (err) console.error('Error playing start sound:', err);
-            });
+      if (e.state === "DOWN") {
+        if (!rightOptionPressed) {
+          rightOptionPressed = true;
+          
+          if (isHandsFreeMode) {
+             // If already in Hands Free Mode, this press initiates the stop sequence
+             // We don't need to do anything here, we'll stop on UP
+             console.log("[DEBUG] Key DOWN in Hands Free Mode (preparing to stop)");
+          } else {
+             // Check for double click potential
+             if (now - lastOptionPressTime < DOUBLE_CLICK_DELAY) {
+               // This is the SECOND press of a double click
+               console.log("[DEBUG] Double click DOWN detected (potential Hands Free Mode)");
+               
+               // Cancel the stop timer from the previous UP event
+               if (doubleClickTimer) {
+                 clearTimeout(doubleClickTimer);
+                 doubleClickTimer = null;
+               }
+               
+               // Ensure recording is running (it should be from the first click, but just in case)
+               if (!audioHandler.isRecording && !recordingStartPromise) {
+                  startRecordingLogic();
+               }
+               
+             } else {
+               // This is a normal FIRST press (Start PTT)
+               console.log("[DEBUG] Key DOWN (PTT Start)");
+               startRecordingLogic();
+             }
           }
-        }).catch((err) => {
-          console.error('[DEBUG] Error starting recording:', err);
-        });
-      }
-    } else if (e.state === "UP" && (keyName === TARGET_KEY_NAME_PRIMARY || keyName === TARGET_KEY_NAME_SECONDARY || keyName === TARGET_KEY_NAME_TERTIARY)) {
-      // Stop recording if key was pressed (handle both recording and starting states)
-      if (rightOptionPressed) {
-        rightOptionPressed = false;
-        console.log('[DEBUG] Right Option key UP detected, stopping recording.');
-        
-        // If recording has already started, stop it and play stop sound
-        if (audioHandler.isRecording) {
-          const stopSoundPath = isProd
-            ? path.join(process.resourcesPath, 'sfx', 'stop-recording-bubble.mp3')
-            : path.join(__dirname, 'sfx', 'stop-recording-bubble.mp3');
-          player.play(stopSoundPath, (err) => {
-            if (err) console.error('Error playing stop sound:', err);
-          });
-          audioHandler.stopRecordingAndProcess();
-        } else if (recordingStartPromise) {
-          // If recording is still starting (quick click scenario), wait for it to start then stop immediately
-          // Don't play stop sound for quick clicks (recording never actually started from user's perspective)
-          console.log('[DEBUG] Key released while recording was starting, will stop when recording starts (no sound for quick click).');
-          recordingStartPromise.then(() => {
-            // Recording has started, now stop it immediately (but don't play sound as it was a quick click)
-            if (audioHandler.isRecording) {
-              console.log('[DEBUG] Recording started, stopping immediately due to quick click (no stop sound).');
-              audioHandler.stopRecordingAndProcess();
+        }
+      } else if (e.state === "UP") {
+        if (rightOptionPressed) {
+          rightOptionPressed = false;
+
+          if (isHandsFreeMode) {
+            // EXIT Hands Free Mode
+            console.log("[DEBUG] Exiting Hands Free Mode -> Stop Recording");
+            isHandsFreeMode = false;
+            stopRecordingLogic();
+          } else {
+            // Check if this is completing a double click
+            if (now - lastOptionPressTime < DOUBLE_CLICK_DELAY) {
+               // This is the UP of the second click -> ENTER Hands Free Mode
+               console.log("[DEBUG] Double click UP detected -> ENTER Hands Free Mode");
+               isHandsFreeMode = true;
+               // Do NOT stop recording
+               
+               // Play a small sound to indicate "Locked" mode? (Optional, skipping for now to keep it simple)
+            } else {
+               // This is the UP of the first click -> PTT Stop (delayed)
+               // We delay stopping to see if a second click comes
+               console.log("[DEBUG] Key UP (Potential PTT Stop) - Waiting for double click...");
+               
+               doubleClickTimer = setTimeout(() => {
+                 console.log("[DEBUG] No double click detected -> Stopping Recording (PTT)");
+                 stopRecordingLogic();
+                 doubleClickTimer = null;
+               }, DOUBLE_CLICK_DELAY);
             }
-          }).catch((err) => {
-            console.error('[DEBUG] Error in recording start promise:', err);
-          });
-          recordingStartPromise = null;
-        } else {
-          console.log('[DEBUG] Key released but no recording was started.');
+          }
+          
+          lastOptionPressTime = now;
         }
       }
     }

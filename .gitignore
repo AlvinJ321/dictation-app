@@ -29,6 +29,7 @@ server/.gitkeep
 # Context
 resource/context
 task/
+context/
 
 # Poc
 paraformer-poc/
