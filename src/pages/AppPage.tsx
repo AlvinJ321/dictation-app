@@ -231,7 +231,7 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
                 </span>
               )}
             </h1>
-            <p className="text-lg text-gray-800 tracking-wide text-center font-normal animate-fade-in-delayed">需要打字时，按住 <span className="font-semibold text-blue-500">右侧Option</span> 键开始说话，松开按键完成转写</p>
+            <p className="text-lg text-gray-800 tracking-wide text-center font-normal animate-fade-in-delayed">需要打字时，按住 <span className="font-semibold text-blue-500">右侧Option</span> 键开始说话，松开结束；或 <span className="font-semibold text-blue-500">双击</span> 开启免提模式</p>
           </div>
         </div>
       </main>
