@@ -247,6 +247,7 @@ let isHandsFreeMode = false;
 let lastOptionPressTime = 0;
 let doubleClickTimer = null;
 const DOUBLE_CLICK_DELAY = 300; // ms to wait for double click
+let hasPlayedStartSoundForCurrentSession = false;
 
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
 
@@ -275,19 +276,21 @@ async function startRecordingLogic() {
   console.log('[DEBUG] Permissions OK. Starting recording.');
   if (feedbackWindow) feedbackWindow.showInactive();
   
+  hasPlayedStartSoundForCurrentSession = false;
   // Save Promise to handle quick clicks where key is released before recording starts
   recordingStartPromise = audioHandler.startRecording();
   
   // Play start sound only after recording actually starts
   recordingStartPromise.then(() => {
     // Only play sound if user is still holding the key OR is in hands-free mode
-    if ((rightOptionPressed || isHandsFreeMode) && audioHandler.isRecording) {
+    if ((rightOptionPressed || isHandsFreeMode) && audioHandler.isRecording && !hasPlayedStartSoundForCurrentSession) {
       const startSoundPath = isProd 
         ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
         : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
       player.play(startSoundPath, (err) => {
         if (err) console.error('Error playing start sound:', err);
       });
+      hasPlayedStartSoundForCurrentSession = true;
     }
   }).catch((err) => {
     console.error('[DEBUG] Error starting recording:', err);
@@ -662,6 +665,15 @@ app.whenReady().then(async () => {
                // Do NOT stop recording
                
                // Play a small sound to indicate "Locked" mode? (Optional, skipping for now to keep it simple)
+               if (audioHandler.isRecording && !hasPlayedStartSoundForCurrentSession) {
+                 const startSoundPath = isProd
+                   ? path.join(process.resourcesPath, 'sfx', 'start-recording-bubble.mp3')
+                   : path.join(__dirname, 'sfx', 'start-recording-bubble.mp3');
+                 player.play(startSoundPath, (err) => {
+                   if (err) console.error('Error playing start sound:', err);
+                 });
+                 hasPlayedStartSoundForCurrentSession = true;
+               }
             } else {
                // This is the UP of the first click -> PTT Stop (delayed)
                // We delay stopping to see if a second click comes
