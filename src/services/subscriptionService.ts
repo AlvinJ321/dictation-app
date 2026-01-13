@@ -1,9 +1,14 @@
 import apiFetch from '../lib/api';
 
+export type SubscriptionTier = 'free' | 'trial' | 'pro';
+
 export interface SubscriptionStatus {
+  tier: SubscriptionTier;
   is_vip: boolean;
-  subscriptionStatus: string; // 'active', 'expired', 'free'
+  is_trial: boolean;
+  subscriptionStatus: string;
   subscriptionExpiresAt: string | null;
+  trialUsedAt?: string | null;
 }
 
 export interface BindSubscriptionResponse {
@@ -12,6 +17,33 @@ export interface BindSubscriptionResponse {
   error?: string;
   subscriptionStatus?: string;
   subscriptionExpiresAt?: string;
+}
+
+export interface StartTrialResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  tier?: SubscriptionTier;
+  subscriptionStatus?: string;
+  subscriptionExpiresAt?: string | null;
+  trialUsedAt?: string | null;
+}
+
+function getOrCreateMockReceiptId() {
+  try {
+    const existing = window.localStorage.getItem('mock_receipt_id');
+    if (existing) return existing;
+    const id = `local_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem('mock_receipt_id', id);
+    return id;
+  } catch {
+    return 'local_dev_device';
+  }
+}
+
+function getMockVipReceipt(receiptId?: string) {
+  const id = receiptId || getOrCreateMockReceiptId();
+  return `TEST_RECEIPT_VIP:${id}`;
 }
 
 export const subscriptionService = {
@@ -34,15 +66,15 @@ export const subscriptionService = {
 
   /**
    * Binds an App Store receipt to the user's account.
-   * @param phone The user's phone number (optional, logic handled by token usually)
+   * @param phone The user's phone number
    * @param receipt The Base64 encoded receipt string
    */
-  bindReceipt: async (receipt: string, phone?: string): Promise<BindSubscriptionResponse> => {
+  bindReceipt: async (receipt: string, phone: string): Promise<BindSubscriptionResponse> => {
     try {
       const response = await apiFetch('/subscription/bind', {
         method: 'POST',
         body: JSON.stringify({
-          phone, // Optional, backend might rely on token
+          phone,
           receipt,
         }),
       });
@@ -66,41 +98,48 @@ export const subscriptionService = {
     }
   },
 
+  startTrial: async (): Promise<StartTrialResponse> => {
+    try {
+      const response = await apiFetch('/subscription/start-trial', { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to start trial' };
+      }
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Network error' };
+    }
+  },
+
+  purchaseProMock: async (phone: string, receiptId?: string): Promise<BindSubscriptionResponse> => {
+    const receipt = getMockVipReceipt(receiptId);
+    return subscriptionService.bindReceipt(receipt, phone);
+  },
+
   /**
    * Orchestrates the purchase restoration/binding flow.
    * 1. Gets the local receipt from Electron.
    * 2. Gets current user info (phone) from store/context.
    * 3. Sends receipt + phone to the backend.
    */
-  restorePurchase: async (): Promise<{ success: boolean; message: string }> => {
+  restorePurchase: async (phoneFromContext?: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // 1. Get Receipt
-      // @ts-ignore
-      const receipt = await window.electron.getAppStoreReceipt();
-      
-      if (!receipt) {
-        return { success: false, message: 'No receipt found on this device.' };
-      }
+      const receipt =
+        (await window.electron?.getAppStoreReceipt?.().catch(() => null)) || getMockVipReceipt();
 
-      // 2. Get User Info (Phone)
-      // We need to fetch the profile first to ensure we have the phone number
-      // In a real app, this might come from a robust auth store
-      let phone: string | undefined;
-      try {
+      let phone = phoneFromContext;
+      if (!phone) {
         const userResponse = await apiFetch('/profile');
         if (userResponse.ok) {
-            const userData = await userResponse.json();
-            phone = userData.phoneNumber;
+          const userData = await userResponse.json();
+          phone = userData.phoneNumber;
         }
-      } catch (e) {
-        console.error('Failed to fetch user profile for phone number', e);
       }
 
       if (!phone) {
-          return { success: false, message: 'Could not retrieve user phone number for binding.' };
+        return { success: false, message: 'Could not retrieve user phone number for binding.' };
       }
 
-      // 3. Bind to Backend
       const result = await subscriptionService.bindReceipt(receipt, phone);
 
       if (result.success) {

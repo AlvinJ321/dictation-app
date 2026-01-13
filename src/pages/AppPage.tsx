@@ -21,13 +21,15 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
-  const isVip = subscription?.is_vip;
+  const tier = subscription?.tier;
+  const isVip = tier === 'pro' || subscription?.is_vip;
+  const isTrial = tier === 'trial' || subscription?.is_trial;
 
   const handleRestorePurchase = async () => {
     setIsRestoring(true);
     console.log('[AppPage] Starting restore purchase flow...');
     try {
-      const result = await subscriptionService.restorePurchase();
+      const result = await subscriptionService.restorePurchase(user?.phoneNumber);
       console.log('[AppPage] Restore result:', result);
       
       if (result.success) {
@@ -225,9 +227,10 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
             <h1 className="text-xl font-semibold text-gray-800 tracking-wide text-center animate-fade-in flex items-center justify-center gap-2">
               {isVip && <Crown className="w-6 h-6 text-yellow-500" fill="currentColor" />}
               <span>Hi {userName}, 欢迎使用Voco</span>
-              {!isVip && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 shadow-sm">
-                  试用
+              {isTrial && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 shadow-sm">
+                  <Clock className="w-3.5 h-3.5" />
+                  试用中
                 </span>
               )}
             </h1>

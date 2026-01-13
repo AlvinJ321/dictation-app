@@ -19,6 +19,7 @@ declare global {
       onAuthFailed: (callback: (data: { reason: string }) => void) => void;
       removeAuthFailedListener: (callback: (data: { reason: string }) => void) => void;
       getAppStoreReceipt: () => Promise<string | null>;
+      openExternal: (url: string) => void;
     }
   }
 }
