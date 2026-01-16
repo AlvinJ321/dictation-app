@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Mic, Loader, Check, XCircle, HelpCircle, Crown, RefreshCw, Clock } from 'lucide-react';
+import { User, LogOut, Mic, Loader, Check, XCircle, HelpCircle, Crown, Clock, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { subscriptionService } from '../services/subscriptionService';
 import appIcon from '../../resource/Voco-app-icon.png';
@@ -17,7 +17,6 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isRefinementOn, setIsRefinementOn] = useState(true);
-  const [isRestoring, setIsRestoring] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   // Use user info from auth context, with a fallback
   const userName = user?.username || 'User';
@@ -25,25 +24,22 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
   const isVip = tier === 'pro' || subscription?.is_vip;
   const isTrial = tier === 'trial' || subscription?.is_trial;
 
-  const handleRestorePurchase = async () => {
-    setIsRestoring(true);
-    console.log('[AppPage] Starting restore purchase flow...');
+  const handlePurchaseFromMenu = async () => {
+    if (!user?.phoneNumber) {
+      alert('未获取到手机号，请重新登录后重试');
+      return;
+    }
     try {
-      const result = await subscriptionService.restorePurchase(user?.phoneNumber);
-      console.log('[AppPage] Restore result:', result);
-      
-      if (result.success) {
-        await refreshSubscription();
-        alert(`测试成功：${result.message}`);
-      } else {
-        console.error('[AppPage] Restore failed:', result.message);
-        alert(`恢复失败: ${result.message}`);
+      const result = await subscriptionService.purchaseProMock(user.phoneNumber);
+      if (!result.success) {
+        alert(result.error || '购买失败');
+        return;
       }
+      await refreshSubscription();
+      alert('购买成功，已升级为 Pro Member。');
+      setIsMenuOpen(false);
     } catch (error: any) {
-      console.error('[AppPage] Restore exception:', error);
-      alert(`发生错误: ${error.message || '未知错误'}`);
-    } finally {
-      setIsRestoring(false);
+      alert(error?.message || '购买失败');
     }
   };
 
@@ -189,15 +185,14 @@ export default function AppPage({ onNavigateToWip }: AppPageProps) {
                     Pro Member
                   </span>}
                 </div>
-                
-                {!isVip && (
+
+                {isTrial && !isVip && (
                   <button
-                    onClick={handleRestorePurchase}
-                    disabled={isRestoring}
+                    onClick={handlePurchaseFromMenu}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                   >
-                    <RefreshCw className={`w-4 h-4 ${isRestoring ? 'animate-spin' : ''}`} />
-                    {isRestoring ? '恢复中...' : '恢复购买'}
+                    <ShoppingBag className="w-4 h-4" />
+                    购买 Pro Member
                   </button>
                 )}
 

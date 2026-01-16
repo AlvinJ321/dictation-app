@@ -39,6 +39,18 @@ contextBridge.exposeInMainWorld('electron', {
   getAppStoreReceipt: async () => {
     return await ipcRenderer.invoke('get-app-receipt');
   },
+  subscription: {
+    setStatus: (status) => ipcRenderer.send('subscription-status-update', status),
+    clearStatus: () => ipcRenderer.send('subscription-status-update', null),
+    onRefreshRequest: (callback) =>
+      ipcRenderer.on('subscription-refresh-request', (event, payload) => callback(payload)),
+    removeRefreshRequestListener: (callback) =>
+      ipcRenderer.removeListener('subscription-refresh-request', callback),
+    onGateBlocked: (callback) =>
+      ipcRenderer.on('subscription-gate-blocked', (event, payload) => callback(payload)),
+    removeGateBlockedListener: (callback) =>
+      ipcRenderer.removeListener('subscription-gate-blocked', callback),
+  },
 
   // PERMISSION MANAGEMENT
   permissions: {

@@ -20,6 +20,14 @@ declare global {
       removeAuthFailedListener: (callback: (data: { reason: string }) => void) => void;
       getAppStoreReceipt: () => Promise<string | null>;
       openExternal: (url: string) => void;
+      subscription: {
+        setStatus: (status: SubscriptionStatus | null) => void;
+        clearStatus: () => void;
+        onRefreshRequest: (callback: (payload?: any) => void) => void;
+        removeRefreshRequestListener: (callback: (payload?: any) => void) => void;
+        onGateBlocked: (callback: (payload?: any) => void) => void;
+        removeGateBlockedListener: (callback: (payload?: any) => void) => void;
+      };
     }
   }
 }
@@ -52,8 +60,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const status = await subscriptionService.getStatus();
     if (status) {
       setSubscription(status);
+      window.electron.subscription.setStatus(status);
     }
   };
+
+  useEffect(() => {
+    const handler = () => {
+      fetchSubscriptionStatus();
+    };
+    window.electron.subscription.onRefreshRequest(handler);
+    return () => {
+      window.electron.subscription.removeRefreshRequestListener(handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const intervalId = setInterval(() => {
+      fetchSubscriptionStatus();
+    }, 15 * 60 * 1000);
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -74,12 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsAuthenticated(false);
             setUser(null);
             setSubscription(null);
+            window.electron.subscription.clearStatus();
         }
       } catch (error) {
         console.error('Authentication check failed:', error);
         setIsAuthenticated(false);
         setUser(null);
         setSubscription(null);
+        window.electron.subscription.clearStatus();
       } finally {
         setIsLoading(false);
       }
@@ -102,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Failed to fetch user on login", error);
         setUser(null);
         setSubscription(null);
+        window.electron.subscription.clearStatus();
       }
     };
     fetchUser();
@@ -125,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
     setUser(null);
     setSubscription(null);
+    window.electron.subscription.clearStatus();
   };
 
   return (

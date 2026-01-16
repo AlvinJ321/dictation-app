@@ -23,6 +23,13 @@ let lastPermissions = { mic: false, accessibility: false };
 let permissionMonitorInterval = null;
 let restartDialogShown = false; // Flag to prevent showing dialog multiple times
 let permissionsChecked = false; // Flag to track if permissions have been checked
+const SUBSCRIPTION_STATUS_TTL_MS = 15 * 60 * 1000;
+let subscriptionCache = null;
+let subscriptionCacheUpdatedAt = 0;
+let optimisticAllowanceUsed = false;
+let lastSubscriptionRefreshRequestAt = 0;
+let lastGateBlockedAt = 0;
+let subscriptionGateBlockedWhilePressed = false;
 
 // --- Message Queue ---
 // A queue to hold messages when the renderer is not ready
@@ -250,6 +257,80 @@ const DOUBLE_CLICK_DELAY = 300; // ms to wait for double click
 let hasPlayedStartSoundForCurrentSession = false;
 
 console.log(`Attempting to listen for Right Option key (guessed as ${TARGET_KEY_NAME_PRIMARY}, ${TARGET_KEY_NAME_SECONDARY}, or ${TARGET_KEY_NAME_TERTIARY})`);
+
+function parseMillis(value) {
+  if (!value) return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? millis : null;
+}
+
+function isEntitledToDictation(status) {
+  if (!status) return false;
+  const now = Date.now();
+  const expiresAtMs = parseMillis(status.subscriptionExpiresAt);
+
+  if (status.tier === 'pro') return expiresAtMs == null || expiresAtMs > now;
+  if (status.tier === 'trial') return expiresAtMs != null && expiresAtMs > now;
+
+  if (status.is_vip) return expiresAtMs == null || expiresAtMs > now;
+  if (status.is_trial) return expiresAtMs != null && expiresAtMs > now;
+
+  return false;
+}
+
+function requestSubscriptionRefresh() {
+  const now = Date.now();
+  if (now - lastSubscriptionRefreshRequestAt < 2000) return;
+  lastSubscriptionRefreshRequestAt = now;
+  sendOrQueueIPC('subscription-refresh-request', { at: now });
+}
+
+function notifySubscriptionGateBlocked() {
+  const now = Date.now();
+  if (now - lastGateBlockedAt < 3000) return;
+  lastGateBlockedAt = now;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.show();
+      mainWindow.focus();
+    } catch (error) {
+      console.error('[Main] Failed to focus main window:', error);
+    }
+  }
+  sendOrQueueIPC('subscription-gate-blocked', { at: now });
+}
+
+function startRecordingWithSubscriptionGate() {
+  const now = Date.now();
+  const hasStatus = !!subscriptionCache;
+  const isFresh = hasStatus && now - subscriptionCacheUpdatedAt <= SUBSCRIPTION_STATUS_TTL_MS;
+  const entitled = isEntitledToDictation(subscriptionCache);
+
+  if (isFresh) {
+    if (!entitled) {
+      notifySubscriptionGateBlocked();
+      return false;
+    }
+    startRecordingLogic();
+    return true;
+  }
+
+  requestSubscriptionRefresh();
+
+  if (entitled) {
+    startRecordingLogic();
+    return true;
+  }
+
+  if (!optimisticAllowanceUsed) {
+    optimisticAllowanceUsed = true;
+    startRecordingLogic();
+    return true;
+  }
+
+  notifySubscriptionGateBlocked();
+  return false;
+}
 
 // Helper function to start recording
 async function startRecordingLogic() {
@@ -550,6 +631,18 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.on('subscription-status-update', (event, status) => {
+    if (!status) {
+      subscriptionCache = null;
+      subscriptionCacheUpdatedAt = 0;
+      optimisticAllowanceUsed = false;
+      return;
+    }
+    subscriptionCache = status;
+    subscriptionCacheUpdatedAt = Date.now();
+    optimisticAllowanceUsed = false;
+  });
+
   ipcMain.on('set-refinement-state', (event, state) => {
     isRefinementOn = state;
     console.log(`[Main] AI Refinement state set to: ${isRefinementOn}`);
@@ -618,6 +711,7 @@ app.whenReady().then(async () => {
       if (e.state === "DOWN") {
         if (!rightOptionPressed) {
           rightOptionPressed = true;
+          subscriptionGateBlockedWhilePressed = false;
           
           if (isHandsFreeMode) {
              // If already in Hands Free Mode, this press initiates the stop sequence
@@ -637,19 +731,30 @@ app.whenReady().then(async () => {
                
                // Ensure recording is running (it should be from the first click, but just in case)
                if (!audioHandler.isRecording && !recordingStartPromise) {
-                  startRecordingLogic();
+                  const ok = startRecordingWithSubscriptionGate();
+                  if (!ok) {
+                    subscriptionGateBlockedWhilePressed = true;
+                  }
                }
                
              } else {
                // This is a normal FIRST press (Start PTT)
                console.log("[DEBUG] Key DOWN (PTT Start)");
-               startRecordingLogic();
+               const ok = startRecordingWithSubscriptionGate();
+               if (!ok) {
+                 subscriptionGateBlockedWhilePressed = true;
+               }
              }
           }
         }
       } else if (e.state === "UP") {
         if (rightOptionPressed) {
           rightOptionPressed = false;
+          if (subscriptionGateBlockedWhilePressed) {
+            subscriptionGateBlockedWhilePressed = false;
+            lastOptionPressTime = now;
+            return;
+          }
 
           if (isHandsFreeMode) {
             // EXIT Hands Free Mode
