@@ -339,15 +339,15 @@ class MainProcessAudio {
                 this.sendIPC('transcription-result', { success: false, error: err.message });
             });
 
-            // Set a timeout to warn the user at 50 seconds
+            // Set a timeout to warn the user at 80 seconds
             this.warningTimer = setTimeout(() => {
-                console.log('[MainAudio] 50 seconds reached, warning user.');
+                console.log('[MainAudio] 80 seconds reached, warning user.');
                 this.sendIPC('recording-status', 'warning');
                 const warningSoundPath = isProd
                   ? path.join(process.resourcesPath, 'sfx', '50seconds.mp3')
                   : path.join(__dirname, '../../sfx/50seconds.mp3');
                 this.player.play(warningSoundPath, (err) => {
-                    if (err) console.error('Error playing 50-second warning sound:', err);
+                    if (err) console.error('Error playing final warning sound:', err);
                 });
                 
                 // Start countdown from 10 seconds
@@ -363,13 +363,13 @@ class MainProcessAudio {
                         this.countdownTimer = null;
                     }
                 }, 1000);
-            }, 50000);
+            }, 80000);
 
-            // Set a timeout to automatically stop recording at 60 seconds
+            // Set a timeout to automatically stop recording at 90 seconds
             this.recordingTimer = setTimeout(() => {
-                console.log('[MainAudio] 60 seconds reached, stopping recording.');
+                console.log('[MainAudio] 90 seconds reached, stopping recording.');
                 this.stopRecordingAndProcess({ maxedOut: true });
-            }, 60000);
+            }, 90000);
         } catch (error) {
             console.error('[MainAudio] Error starting recording:', error.message);
             this.isRecording = false;

@@ -76,7 +76,7 @@ const FeedbackComponent: React.FC = () => {
             {showMaxedOutMessage && (
                 <div className="w-full h-full flex justify-center items-center animate-fade-in-out">
                     <div className="inline-flex items-center p-2 bg-gray-900 bg-opacity-75 rounded-lg text-white font-sans backdrop-blur-sm">
-                        <span className="text-sm">一次可录最长60秒的语音</span>
+                        <span className="text-sm">一次可录最长90秒的语音</span>
                     </div>
                 </div>
             )}
