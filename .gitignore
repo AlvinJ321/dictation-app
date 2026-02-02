@@ -33,3 +33,8 @@ context/
 
 # Poc
 paraformer-poc/
+
+Users/
+release/
+build/*.provisionprofile
+build/entitlements.mac.inherit.plist

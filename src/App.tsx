@@ -44,9 +44,10 @@ function AppContent() {
       }
     };
 
-    window.electron.subscription.onGateBlocked(handler);
+    const subscriptionIpc = window.electron?.subscription;
+    subscriptionIpc?.onGateBlocked?.(handler);
     return () => {
-      window.electron.subscription.removeGateBlockedListener(handler);
+      subscriptionIpc?.removeGateBlockedListener?.(handler);
     };
   }, [refreshSubscription]);
 

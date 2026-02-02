@@ -2,7 +2,7 @@ export {};
 
 declare global {
   interface Window {
-    electron: {
+    electron?: {
       onRecordingStatus: (callback: (status: 'recording' | 'processing' | 'success' | 'idle' | 'warning' | 'error') => void) => void;
       removeRecordingStatusListener: (callback: (status: 'recording' | 'processing' | 'success' | 'idle' | 'warning' | 'error') => void) => void;
       onTranscriptionResult: (callback: (result: { success: boolean; text?: string; error?: string; maxedOut?: boolean }) => void) => void;

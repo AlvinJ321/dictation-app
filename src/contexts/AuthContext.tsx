@@ -6,7 +6,7 @@ import { subscriptionService, SubscriptionStatus } from '../services/subscriptio
 // This is the important part of the fix: we will now call the method exposed in preload.js
 declare global {
   interface Window {
-    electron: {
+    electron?: {
       store: {
         getTokens: () => Promise<{ accessToken?: string; refreshToken?: string; }>;
         setTokens: (tokens: { accessToken: string; refreshToken: string; }) => void;
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const status = await subscriptionService.getStatus();
     if (status) {
       setSubscription(status);
-      window.electron.subscription.setStatus(status);
+      window.electron?.subscription?.setStatus?.(status);
     }
   };
 
@@ -68,9 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handler = () => {
       fetchSubscriptionStatus();
     };
-    window.electron.subscription.onRefreshRequest(handler);
+
+    const subscriptionIpc = window.electron?.subscription;
+    subscriptionIpc?.onRefreshRequest?.(handler);
     return () => {
-      window.electron.subscription.removeRefreshRequestListener(handler);
+      subscriptionIpc?.removeRefreshRequestListener?.(handler);
     };
   }, []);
 
@@ -103,14 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsAuthenticated(false);
             setUser(null);
             setSubscription(null);
-            window.electron.subscription.clearStatus();
+            window.electron?.subscription?.clearStatus?.();
         }
       } catch (error) {
         console.error('Authentication check failed:', error);
         setIsAuthenticated(false);
         setUser(null);
         setSubscription(null);
-        window.electron.subscription.clearStatus();
+        window.electron?.subscription?.clearStatus?.();
       } finally {
         setIsLoading(false);
       }
@@ -120,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (tokens: { accessToken: string; refreshToken: string }) => {
     // We use the exposed store method to set tokens, ensuring it's handled in the main process
-    window.electron.store.setTokens(tokens);
+    window.electron?.store?.setTokens(tokens);
     setIsAuthenticated(true);
     const fetchUser = async () => {
       try {
@@ -133,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Failed to fetch user on login", error);
         setUser(null);
         setSubscription(null);
-        window.electron.subscription.clearStatus();
+        window.electron?.subscription?.clearStatus?.();
       }
     };
     fetchUser();
@@ -153,11 +155,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // This is the critical change: call the method exposed in preload.js
     // to clear tokens in both the main and renderer process stores.
-    window.electron.store.clearTokens(); 
+    window.electron?.store?.clearTokens();
     setIsAuthenticated(false);
     setUser(null);
     setSubscription(null);
-    window.electron.subscription.clearStatus();
+    window.electron?.subscription?.clearStatus?.();
   };
 
   return (
